@@ -139,7 +139,10 @@ export type GenesisInstallation = {
   notes: string;
 };
 
-export type GenesisSuggestionSource = 'tariff' | 'arbvol' | 'history';
+export type GenesisSuggestionSource = 'tariff' | 'objectTariff' | 'invoiceLine' | 'arbvol' | 'history';
+export type GenesisWorkLineType = 'text' | 'charge' | 'control';
+export type GenesisPdfDocumentKind = 'invoice' | 'reminder' | 'paymentReminder' | 'rapport' | 'export' | 'other';
+export type GenesisInvoiceStatus = 'open' | 'paid' | 'partial' | 'unknown';
 
 export type GenesisPlannedWork = {
   id: string;
@@ -148,6 +151,9 @@ export type GenesisPlannedWork = {
   workKey: string;
   source: GenesisSuggestionSource;
   tariffCode: string;
+  lineType: GenesisWorkLineType;
+  invoiceNumber: string;
+  position: string;
   month: CleaningMonth | '';
   tour: string;
   quantity: string;
@@ -160,6 +166,60 @@ export type GenesisPlannedWork = {
   confidence: number;
   reason: string;
   notes: string;
+};
+
+export type GenesisInvoice = {
+  id: string;
+  propertyId: string;
+  sourceKey: string;
+  invoiceKey: string;
+  invoiceNumber: string;
+  workDate: string;
+  invoiceDate: string;
+  dueDate: string;
+  paidDate: string;
+  status: GenesisInvoiceStatus;
+  dunningLevel: string;
+  netAmount: string;
+  vatAmount: string;
+  totalAmount: string;
+  paidAmount: string;
+  invoiceAddress: string;
+  propertyAddress: string;
+  notes: string;
+};
+
+export type GenesisInvoiceLine = {
+  id: string;
+  propertyId: string;
+  sourceKey: string;
+  invoiceNumber: string;
+  lineKey: string;
+  position: string;
+  lineType: GenesisWorkLineType;
+  tariffCode: string;
+  marker: string;
+  quantity: string;
+  description: string;
+  unitPrice: string;
+  amount: string;
+  taxPoints: string;
+  notes: string;
+};
+
+export type GenesisPdfDocument = {
+  id: string;
+  propertyId: string;
+  sourceKey: string;
+  documentKey: string;
+  kind: GenesisPdfDocumentKind;
+  relativePath: string;
+  archivePath: string;
+  localUri: string;
+  fileName: string;
+  invoiceNumber: string;
+  date: string;
+  matched: boolean;
 };
 
 export type GenesisHistoryEntry = {
@@ -178,6 +238,11 @@ export type GenesisHistoryEntry = {
 export type GenesisPropertyContext = {
   importRun: GenesisImportRun | null;
   installations: GenesisInstallation[];
+  invoices: GenesisInvoice[];
+  invoiceLines: GenesisInvoiceLine[];
+  pdfDocuments: GenesisPdfDocument[];
+  objectTariffSuggestions: GenesisPlannedWork[];
+  invoiceLineSuggestions: GenesisPlannedWork[];
   tariffSuggestions: GenesisPlannedWork[];
   arbvolSummary: GenesisPlannedWork[];
   plannedWork: GenesisPlannedWork[];
@@ -226,22 +291,39 @@ export type GenesisBundlePlannedWork = Omit<GenesisPlannedWork, 'id' | 'property
   raw?: Record<string, unknown>;
 };
 
+export type GenesisBundleInvoice = Omit<GenesisInvoice, 'id' | 'propertyId'> & {
+  raw?: Record<string, unknown>;
+};
+
+export type GenesisBundleInvoiceLine = Omit<GenesisInvoiceLine, 'id' | 'propertyId'> & {
+  raw?: Record<string, unknown>;
+};
+
+export type GenesisBundlePdfDocument = Omit<GenesisPdfDocument, 'id' | 'propertyId' | 'localUri'> & {
+  localUri?: string;
+  raw?: Record<string, unknown>;
+};
+
 export type GenesisBundleHistoryEntry = Omit<GenesisHistoryEntry, 'id' | 'propertyId'> & {
   raw?: Record<string, unknown>;
 };
 
 export type GenesisBundleV1 = {
-  schemaVersion: 'genesis-bundle.v1';
+  schemaVersion: 'genesis-bundle.v1' | 'genesis-bundle.v2';
   metadata: {
     exportedAt: string;
     converterVersion: string;
     sourceFileName: string;
     tableCounts: Record<string, number>;
     warnings: string[];
+    documentCounts?: Record<string, number>;
   };
   properties: GenesisBundleProperty[];
   installations: GenesisBundleInstallation[];
   plannedWork: GenesisBundlePlannedWork[];
+  invoices?: GenesisBundleInvoice[];
+  invoiceLines?: GenesisBundleInvoiceLine[];
+  pdfDocuments?: GenesisBundlePdfDocument[];
   history: GenesisBundleHistoryEntry[];
 };
 
@@ -255,6 +337,9 @@ export type GenesisImportResult = ImportResult & {
   inactive: number;
   installations: number;
   plannedWork: number;
+  invoices: number;
+  invoiceLines: number;
+  pdfDocuments: number;
   history: number;
   warnings: string[];
 };

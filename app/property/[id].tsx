@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { FilePlus2 } from 'lucide-react-native';
+import { FilePlus2, FileText, Share2 } from 'lucide-react-native';
+import * as Sharing from 'expo-sharing';
 
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
@@ -66,6 +67,19 @@ export default function PropertyDetailScreen() {
     } finally {
       setCreating(false);
     }
+  }
+
+  async function openPdf(localUri: string) {
+    if (!localUri) {
+      Alert.alert('PDF nicht lokal verfügbar', 'Dieses Dokument wurde nur als Metadatum importiert. Importiere das Genesis-Transport-ZIP, um PDFs direkt zu öffnen.');
+      return;
+    }
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(localUri);
+      return;
+    }
+    await Linking.openURL(localUri);
   }
 
   if (loading) {
@@ -137,7 +151,10 @@ export default function PropertyDetailScreen() {
           />
           <Card>
             <Info label="Anlagen" value={`${genesisContext.installations.length}`} />
-            <Info label="Tarifvorschläge" value={`${genesisContext.tariffSuggestions.length}`} />
+            <Info label="Objekttarife" value={`${genesisContext.objectTariffSuggestions.length}`} />
+            <Info label="Rechnungsvorschläge" value={`${genesisContext.invoiceLineSuggestions.length}`} />
+            <Info label="Rechnungen" value={`${genesisContext.invoices.length}`} />
+            <Info label="PDFs" value={`${genesisContext.pdfDocuments.length}`} />
             <Info label="Arbeitsvolumen" value={`${genesisContext.arbvolSummary.length}`} />
             <Info label="Historie" value={`${genesisContext.history.length}`} />
           </Card>
@@ -163,15 +180,94 @@ export default function PropertyDetailScreen() {
             </>
           ) : null}
 
-          {genesisContext.tariffSuggestions.length ? (
+          {genesisContext.invoices.length ? (
             <>
-              <SectionHeader title="Tarifvorschläge" />
+              <SectionHeader title="Rechnungen" meta="Read-only aus Genesis" />
               <View style={styles.list}>
-                {genesisContext.tariffSuggestions.slice(0, 8).map((work) => (
+                {genesisContext.invoices.map((invoice) => {
+                  const lines = genesisContext.invoiceLines.filter((line) => line.invoiceNumber === invoice.invoiceNumber);
+                  const documents = genesisContext.pdfDocuments.filter((document) => document.invoiceNumber === invoice.invoiceNumber);
+                  return (
+                    <Card key={invoice.id}>
+                      <View style={styles.invoiceHeader}>
+                        <View style={styles.invoiceTitleBlock}>
+                          <Text style={styles.itemTitle}>Rechnung {invoice.invoiceNumber}</Text>
+                          <Text style={styles.meta}>
+                            {[invoiceStatusLabel(invoice.status), invoice.workDate || invoice.invoiceDate, invoice.totalAmount && `CHF ${invoice.totalAmount}`]
+                              .filter(Boolean)
+                              .join(' · ') || '-'}
+                          </Text>
+                        </View>
+                        {documents[0] ? (
+                          <Button
+                            label="PDF"
+                            icon={Share2}
+                            onPress={() => openPdf(documents[0].localUri)}
+                            variant="secondary"
+                          />
+                        ) : null}
+                      </View>
+                      <View style={styles.invoiceGrid}>
+                        <Info label="Arbeitsdatum" value={invoice.workDate} />
+                        <Info label="Rechnungsdatum" value={invoice.invoiceDate} />
+                        <Info label="Fällig" value={invoice.dueDate} />
+                        <Info label="Bezahlt" value={invoice.paidDate} />
+                        <Info label="Netto" value={invoice.netAmount ? `CHF ${invoice.netAmount}` : ''} />
+                        <Info label="MWST" value={invoice.vatAmount ? `CHF ${invoice.vatAmount}` : ''} />
+                        <Info label="Bezahlt Betrag" value={invoice.paidAmount ? `CHF ${invoice.paidAmount}` : ''} />
+                        <Info label="Mahnstufe" value={invoice.dunningLevel} />
+                      </View>
+                      <Info label="Rechnungsadresse" value={invoice.invoiceAddress} multiline />
+                      {invoice.propertyAddress ? <Info label="Liegenschaft auf Rechnung" value={invoice.propertyAddress} multiline /> : null}
+                      {lines.length ? (
+                        <View style={styles.invoiceLines}>
+                          {lines.map((line) => (
+                            <View key={line.id} style={styles.invoiceLine}>
+                              <Text style={styles.invoiceLineTitle}>
+                                {[line.position && `${line.position}.`, line.description].filter(Boolean).join(' ') || 'Position'}
+                              </Text>
+                              <Text style={styles.meta}>
+                                {[
+                                  line.lineType === 'control' && 'Kontrollzeile',
+                                  line.tariffCode,
+                                  line.quantity && `Anzahl ${line.quantity}`,
+                                  line.unitPrice && `à CHF ${line.unitPrice}`,
+                                  line.amount && `CHF ${line.amount}`,
+                                ].filter(Boolean).join(' · ') || '-'}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : null}
+                      {documents.length > 1 ? (
+                        <View style={styles.pdfList}>
+                          {documents.slice(1).map((document) => (
+                            <Button
+                              key={document.id}
+                              label={document.kind === 'reminder' ? 'Mahnung' : document.kind === 'paymentReminder' ? 'Zahlungserinnerung' : 'PDF'}
+                              icon={FileText}
+                              onPress={() => openPdf(document.localUri)}
+                              variant="ghost"
+                            />
+                          ))}
+                        </View>
+                      ) : null}
+                    </Card>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
+
+          {genesisContext.objectTariffSuggestions.length ? (
+            <>
+              <SectionHeader title="Objekttarife" />
+              <View style={styles.list}>
+                {genesisContext.objectTariffSuggestions.slice(0, 8).map((work) => (
                   <Card key={work.id} compact>
                     <Text style={styles.itemTitle}>{work.description || work.tp || 'Geplante Arbeit'}</Text>
                     <Text style={styles.meta}>
-                      {[work.tariffCode, work.quantity && `Anzahl ${work.quantity}`, work.tp && `${work.tp} TP`, work.amount && `CHF ${work.amount}`]
+                      {[work.lineType === 'control' && 'Kontrollzeile', work.tariffCode, work.quantity && `Anzahl ${work.quantity}`, work.tp && `${work.tp} TP`, work.amount && `CHF ${work.amount}`]
                         .filter(Boolean)
                         .join(' · ') || '-'}
                     </Text>
@@ -249,6 +345,19 @@ function Info({ label, value, multiline = false }: { label: string; value: strin
   );
 }
 
+function invoiceStatusLabel(status: string): string {
+  if (status === 'paid') {
+    return 'Bezahlt';
+  }
+  if (status === 'partial') {
+    return 'Teilbezahlt';
+  }
+  if (status === 'open') {
+    return 'Offen';
+  }
+  return 'Unbekannt';
+}
+
 const styles = StyleSheet.create({
   title: {
     color: colors.text,
@@ -262,6 +371,40 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: spacing.md,
+  },
+  invoiceHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+  },
+  invoiceTitleBlock: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  invoiceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  invoiceLines: {
+    gap: spacing.sm,
+  },
+  invoiceLine: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 8,
+    padding: spacing.md,
+  },
+  invoiceLineTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+  pdfList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   itemTitle: {
     color: colors.text,

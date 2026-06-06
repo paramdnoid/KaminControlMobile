@@ -39,7 +39,7 @@ type FormErrors = {
   chimneySweepName?: string;
 };
 
-type SuggestionTab = 'tariff' | 'history' | 'arbvol';
+type SuggestionTab = 'objectTariff' | 'invoiceLine' | 'history' | 'arbvol';
 
 function emptyWorkItem(reportId: string, sortOrder: number): WorkItem {
   return {
@@ -65,7 +65,7 @@ export default function ReportScreen() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [showJson, setShowJson] = useState(false);
-  const [suggestionTab, setSuggestionTab] = useState<SuggestionTab>('tariff');
+  const [suggestionTab, setSuggestionTab] = useState<SuggestionTab>('objectTariff');
   const [expandedItemIds, setExpandedItemIds] = useState<string[]>([]);
   const hydrated = useRef(false);
 
@@ -161,17 +161,26 @@ export default function ReportScreen() {
   }
 
   function applyTariffSuggestion(work: GenesisPlannedWork) {
-    if (!report) {
+    if (!report || work.lineType === 'control') {
       return;
     }
     appendSuggestedItems([workFromPlannedSuggestion(report.id, work)]);
   }
 
   function applyAllTariffs() {
-    if (!report || !genesisContext?.tariffSuggestions.length) {
+    if (!report || !genesisContext?.objectTariffSuggestions.length) {
       return;
     }
-    appendSuggestedItems(genesisContext.tariffSuggestions.map((work) => workFromPlannedSuggestion(report.id, work)));
+    appendSuggestedItems(genesisContext.objectTariffSuggestions
+      .filter((work) => work.lineType !== 'control')
+      .map((work) => workFromPlannedSuggestion(report.id, work)));
+  }
+
+  function applyInvoiceLineSuggestion(work: GenesisPlannedWork) {
+    if (!report || work.lineType === 'control') {
+      return;
+    }
+    appendSuggestedItems([workFromPlannedSuggestion(report.id, work)]);
   }
 
   function applyArbvolSuggestion(work: GenesisPlannedWork) {
@@ -283,9 +292,9 @@ export default function ReportScreen() {
 
   const property = bundle.property;
   const isCompleted = report.status === 'completed' || report.status === 'exported';
-  const tariffSuggestions = genesisContext?.tariffSuggestions ?? [];
-  const allTariffSuggestionsApplied = tariffSuggestions.length > 0
-    && tariffSuggestions.every((work) => isSuggestedWorkApplied(work));
+  const objectTariffSuggestions = genesisContext?.objectTariffSuggestions ?? [];
+  const allTariffSuggestionsApplied = objectTariffSuggestions.filter((work) => work.lineType !== 'control').length > 0
+    && objectTariffSuggestions.filter((work) => work.lineType !== 'control').every((work) => isSuggestedWorkApplied(work));
 
   return (
     <Screen
@@ -348,7 +357,7 @@ export default function ReportScreen() {
               <Sparkles color={colors.primary} size={21} />
               <Text style={styles.title}>Intelligente Vorschläge</Text>
             </View>
-            {genesisContext.tariffSuggestions.length ? (
+            {genesisContext.objectTariffSuggestions.some((work) => work.lineType !== 'control') ? (
               <Button
                 disabled={allTariffSuggestionsApplied}
                 icon={Plus}
@@ -360,10 +369,16 @@ export default function ReportScreen() {
           </View>
           <View style={styles.segmented}>
             <SuggestionTabButton
-              active={suggestionTab === 'tariff'}
-              count={genesisContext.tariffSuggestions.length}
-              label="Tarife"
-              onPress={() => setSuggestionTab('tariff')}
+              active={suggestionTab === 'objectTariff'}
+              count={genesisContext.objectTariffSuggestions.length}
+              label="Objekttarife"
+              onPress={() => setSuggestionTab('objectTariff')}
+            />
+            <SuggestionTabButton
+              active={suggestionTab === 'invoiceLine'}
+              count={genesisContext.invoiceLineSuggestions.length}
+              label="Rechnungen"
+              onPress={() => setSuggestionTab('invoiceLine')}
             />
             <SuggestionTabButton
               active={suggestionTab === 'history'}
@@ -379,15 +394,18 @@ export default function ReportScreen() {
             />
           </View>
 
-          {suggestionTab === 'tariff' ? (
-            genesisContext.tariffSuggestions.length ? (
+          {suggestionTab === 'objectTariff' ? (
+            genesisContext.objectTariffSuggestions.length ? (
               <View style={styles.suggestionList}>
-                {genesisContext.tariffSuggestions.slice(0, 12).map((work) => (
+                {genesisContext.objectTariffSuggestions.slice(0, 16).map((work) => {
+                  const canApply = work.lineType !== 'control';
+                  return (
                   <SuggestionRow
                     key={work.id}
-                    actionLabel={isSuggestedWorkApplied(work) ? 'Übernommen' : '+'}
-                    applied={isSuggestedWorkApplied(work)}
+                    actionLabel={!canApply ? 'Kontext' : isSuggestedWorkApplied(work) ? 'Übernommen' : '+'}
+                    applied={!canApply || isSuggestedWorkApplied(work)}
                     meta={[
+                      work.lineType === 'control' && 'Kontrollzeile',
                       work.tariffCode,
                       work.quantity && `Anzahl ${work.quantity}`,
                       work.tp && `${work.tp} TP`,
@@ -398,10 +416,42 @@ export default function ReportScreen() {
                     subtitle={work.reason || work.notes}
                     title={work.description || 'Tarifposition'}
                   />
-                ))}
+                  );
+                })}
               </View>
             ) : (
-              <Text style={styles.meta}>Keine Tarifvorschläge für diese Liegenschaft vorhanden.</Text>
+              <Text style={styles.meta}>Keine Objekttarife für diese Liegenschaft vorhanden.</Text>
+            )
+          ) : null}
+
+          {suggestionTab === 'invoiceLine' ? (
+            genesisContext.invoiceLineSuggestions.length ? (
+              <View style={styles.suggestionList}>
+                {genesisContext.invoiceLineSuggestions.slice(0, 16).map((work) => {
+                  const canApply = work.lineType !== 'control';
+                  return (
+                    <SuggestionRow
+                      key={work.id}
+                      actionLabel={!canApply ? 'Kontext' : isSuggestedWorkApplied(work) ? 'Übernommen' : '+'}
+                      applied={!canApply || isSuggestedWorkApplied(work)}
+                      meta={[
+                        work.invoiceNumber && `Rechnung ${work.invoiceNumber}`,
+                        work.position && `Pos. ${work.position}`,
+                        work.lineType === 'control' && 'Kontrollzeile',
+                        work.tariffCode,
+                        work.quantity && `Anzahl ${work.quantity}`,
+                        work.amount && `CHF ${work.amount}`,
+                        work.unitPrice && `à ${work.unitPrice}`,
+                      ].filter(Boolean).join(' · ')}
+                      onPress={() => applyInvoiceLineSuggestion(work)}
+                      subtitle={work.reason || work.notes}
+                      title={work.description || 'Rechnungsposition'}
+                    />
+                  );
+                })}
+              </View>
+            ) : (
+              <Text style={styles.meta}>Keine Rechnungspositionen als Vorlage vorhanden.</Text>
             )
           ) : null}
 

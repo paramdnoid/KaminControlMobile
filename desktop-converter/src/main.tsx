@@ -23,7 +23,7 @@ function App() {
 
   async function convert() {
     if (!zipPath) {
-      setError('Bitte zuerst Daten.zip auswählen.');
+      setError('Bitte zuerst eine Genesis-Sicherung auswählen.');
       return;
     }
 
@@ -39,7 +39,7 @@ function App() {
     }
   }
 
-  async function saveBundle() {
+  async function saveExportFolder() {
     if (!result) {
       return;
     }
@@ -47,20 +47,41 @@ function App() {
     setBusy(true);
     setError('');
     try {
-      const nextPath = await window.genesisConverter.saveBundle(result.audit.sourcePath, result.bundle);
+      const nextPath = await window.genesisConverter.saveExportFolder(result.audit.sourcePath, result.bundle);
       if (nextPath) {
         setSavedPath(nextPath);
       }
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Genesis-Bundle konnte nicht gespeichert werden.');
+      setError(nextError instanceof Error ? nextError.message : 'Genesis-Exportordner konnte nicht gespeichert werden.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveTransportZip() {
+    if (!result) {
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    try {
+      const nextPath = await window.genesisConverter.saveTransportZip(result.audit.sourcePath, result.bundle);
+      if (nextPath) {
+        setSavedPath(nextPath);
+      }
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Genesis-Transport-ZIP konnte nicht gespeichert werden.');
     } finally {
       setBusy(false);
     }
   }
 
   const warningCount = result?.bundle.metadata.warnings.length ?? 0;
-  const tariffSuggestionCount = result?.bundle.plannedWork.filter((item) => item.source === 'tariff').length ?? 0;
+  const objectTariffSuggestionCount = result?.bundle.plannedWork.filter((item) => item.source === 'objectTariff' || item.source === 'tariff').length ?? 0;
+  const invoiceLineSuggestionCount = result?.bundle.plannedWork.filter((item) => item.source === 'invoiceLine').length ?? 0;
   const arbvolCount = result?.bundle.plannedWork.filter((item) => item.source === 'arbvol').length ?? 0;
+  const documentCounts = result?.bundle.metadata.documentCounts ?? {};
 
   return (
     <main className="shell">
@@ -79,7 +100,7 @@ function App() {
         <div className="step">
           <span className="stepIndex">1</span>
           <div>
-            <h2>Daten.zip auswählen</h2>
+            <h2>Genesis-Sicherung auswählen</h2>
             <p>{zipPath || 'Noch keine Datei gewählt.'}</p>
           </div>
           <button type="button" className="secondary" onClick={pickZip} disabled={busy}>
@@ -99,12 +120,17 @@ function App() {
         <div className="step">
           <span className="stepIndex">3</span>
           <div>
-            <h2>Bundle speichern</h2>
-            <p>{savedPath || 'Speichert genesis-export-v1.json für die Mobile-App.'}</p>
+            <h2>Exportordner speichern</h2>
+            <p>{savedPath || 'Speichert genesis-export-v2.json und PDF-Dateien für die Mobile-App.'}</p>
           </div>
-          <button type="button" onClick={saveBundle} disabled={busy || !result}>
-            JSON speichern
-          </button>
+          <div className="buttonGroup">
+            <button type="button" onClick={saveExportFolder} disabled={busy || !result}>
+              Exportordner speichern
+            </button>
+            <button type="button" className="secondary" onClick={saveTransportZip} disabled={busy || !result}>
+              Transport-ZIP
+            </button>
+          </div>
         </div>
       </section>
 
@@ -115,7 +141,12 @@ function App() {
           <section className="metrics">
             <Metric label="Liegenschaften" value={result.bundle.properties.length} />
             <Metric label="Anlagen" value={result.bundle.installations.length} />
-            <Metric label="Tarifvorschläge" value={tariffSuggestionCount} />
+            <Metric label="Objekttarife" value={objectTariffSuggestionCount} />
+            <Metric label="Rechnungspositionen" value={result.bundle.invoiceLines?.length ?? 0} />
+            <Metric label="Rechnungen" value={result.bundle.invoices?.length ?? 0} />
+            <Metric label="Rechnung-PDFs" value={documentCounts.invoice ?? 0} />
+            <Metric label="Rapport-PDFs" value={documentCounts.rapport ?? 0} />
+            <Metric label="Rechnungsvorschläge" value={invoiceLineSuggestionCount} />
             <Metric label="Arbeitsvolumen" value={arbvolCount} />
             <Metric label="Historie" value={result.bundle.history.length} />
             <Metric label="Warnungen" value={warningCount} tone={warningCount ? 'warn' : 'ok'} />

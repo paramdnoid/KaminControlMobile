@@ -24,7 +24,8 @@ export default function ImportScreen() {
   const [genesisLoading, setGenesisLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [genesisSaving, setGenesisSaving] = useState(false);
-  const tariffSuggestionCount = genesisPreview?.bundle.plannedWork.filter((item) => item.source === 'tariff').length ?? 0;
+  const objectTariffSuggestionCount = genesisPreview?.bundle.plannedWork.filter((item) => item.source === 'objectTariff' || item.source === 'tariff').length ?? 0;
+  const invoiceLineSuggestionCount = genesisPreview?.bundle.plannedWork.filter((item) => item.source === 'invoiceLine').length ?? 0;
   const arbvolCount = genesisPreview?.bundle.plannedWork.filter((item) => item.source === 'arbvol').length ?? 0;
 
   async function pickFile() {
@@ -61,7 +62,7 @@ export default function ImportScreen() {
       const picked = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
         multiple: false,
-        type: ['application/json', 'text/json', 'text/plain'],
+        type: ['application/json', 'text/json', 'text/plain', 'application/zip', 'application/x-zip-compressed'],
       });
 
       if (!picked.canceled && picked.assets[0]) {
@@ -130,7 +131,7 @@ export default function ImportScreen() {
       <Card>
         <Text style={styles.label}>Genesis-Bundle</Text>
         <Text style={styles.text}>
-          Importiert `genesis-export-v1.json` aus der Desktop-Converter-App. MDB-Dateien bleiben ausserhalb der Mobile-App.
+          Importiert `genesis-export-v2.json` oder `genesis-mobile-export.zip` aus der Desktop-Converter-App. MDB-Dateien bleiben ausserhalb der Mobile-App.
         </Text>
         <Button
           label={genesisPreview ? 'Anderes Genesis-Bundle wählen' : 'Genesis-Bundle wählen'}
@@ -193,7 +194,10 @@ export default function ImportScreen() {
             <View style={styles.resultGrid}>
               <Metric label="Datei" value={genesisPreview.fileName} />
               <Metric label="Anlagen" value={`${genesisPreview.bundle.installations.length}`} />
-              <Metric label="Tarifvorschläge" value={`${tariffSuggestionCount}`} />
+              <Metric label="Objekttarife" value={`${objectTariffSuggestionCount}`} />
+              <Metric label="Rechnungsvorschläge" value={`${invoiceLineSuggestionCount}`} />
+              <Metric label="Rechnungen" value={`${genesisPreview.bundle.invoices?.length ?? 0}`} />
+              <Metric label="PDFs" value={`${genesisPreview.bundle.pdfDocuments?.length ?? 0}`} />
               <Metric label="Arbeitsvolumen" value={`${arbvolCount}`} />
               <Metric label="Historie" value={`${genesisPreview.bundle.history.length}`} />
             </View>
@@ -246,6 +250,9 @@ export default function ImportScreen() {
             <Metric label="Inaktiv" value={`${genesisResult.inactive}`} />
             <Metric label="Anlagen" value={`${genesisResult.installations}`} />
             <Metric label="Vorschläge" value={`${genesisResult.plannedWork}`} />
+            <Metric label="Rechnungen" value={`${genesisResult.invoices}`} />
+            <Metric label="Positionen" value={`${genesisResult.invoiceLines}`} />
+            <Metric label="PDFs" value={`${genesisResult.pdfDocuments}`} />
             <Metric label="Historie" value={`${genesisResult.history}`} />
           </View>
           <Button label="Zur Suche" onPress={() => router.replace('/')} variant="secondary" />

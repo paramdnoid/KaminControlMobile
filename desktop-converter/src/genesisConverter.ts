@@ -11,10 +11,16 @@ import type {
   FireSystemCode,
   FuelType,
   GenesisBundleHistoryEntry,
+  GenesisBundleInvoice,
+  GenesisBundleInvoiceLine,
   GenesisBundleInstallation,
+  GenesisBundlePdfDocument,
   GenesisBundlePlannedWork,
   GenesisBundleProperty,
   GenesisBundleV1,
+  GenesisInvoiceStatus,
+  GenesisPdfDocumentKind,
+  GenesisWorkLineType,
 } from '../../src/types.ts';
 
 type Row = Record<string, unknown>;
@@ -76,7 +82,7 @@ export type ConverterResult = {
   audit: ConverterAudit;
 };
 
-const CONVERTER_VERSION = '1.0.0';
+const CONVERTER_VERSION = '2.0.0';
 const CORE_DATABASES = ['KFDSTAMM.MDB', 'ARBVOL.MDB', 'Anschriften.MDB', 'FKSTAMM.MDB'];
 const AUDIT_DATABASES = ['KFKRECH.MDB', 'OPSTAMM.MDB'];
 
@@ -128,11 +134,15 @@ function parsePostalCity(value: unknown): { postalCode: string; city: string } {
 
 function normalizeDate(value: unknown): string {
   const text = clean(value);
-  const match = text.match(/^(\d{4})[.-](\d{1,2})[.-](\d{1,2})$/);
-  if (!match) {
-    return text;
+  const isoMatch = text.match(/^(\d{4})[.-](\d{1,2})[.-](\d{1,2})$/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
   }
-  return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+  const swissMatch = text.match(/^(\d{1,2})[.-](\d{1,2})[.-](\d{4})$/);
+  if (swissMatch) {
+    return `${swissMatch[3]}-${swissMatch[2].padStart(2, '0')}-${swissMatch[1].padStart(2, '0')}`;
+  }
+  return text;
 }
 
 function parseAmount(value: unknown): number {
@@ -149,6 +159,42 @@ function formatDecimal(value: number, decimals = 2): string {
 
 function formatQuantity(value: unknown): string {
   return formatDecimal(parseAmount(value), 4);
+}
+
+function formatMoney(value: unknown): string {
+  return formatDecimal(parseAmount(value), 2);
+}
+
+function formatUnitPriceFromAmount(amount: unknown, quantity: unknown): string {
+  const amountValue = parseAmount(amount);
+  const quantityValue = parseAmount(quantity);
+  if (!amountValue || !quantityValue) {
+    return '';
+  }
+  return formatDecimal(amountValue / quantityValue, 4);
+}
+
+function normalizeCompactDate(value: string): string {
+  const match = clean(value).match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (!match) {
+    return '';
+  }
+  return `${match[3]}-${match[2]}-${match[1]}`;
+}
+
+function invoiceStatus(total: unknown, paid: unknown, paidDate: unknown): GenesisInvoiceStatus {
+  const totalAmount = parseAmount(total);
+  const paidAmount = parseAmount(paid);
+  if (!totalAmount) {
+    return clean(paidDate) ? 'paid' : 'unknown';
+  }
+  if (paidAmount >= totalAmount || clean(paidDate)) {
+    return 'paid';
+  }
+  if (paidAmount > 0) {
+    return 'partial';
+  }
+  return 'open';
 }
 
 function buildingTypeFrom(value: unknown): { buildingType: BuildingType | ''; otherBuildingType: string } {
@@ -354,6 +400,159 @@ export function mapKfdProperty(
   };
 }
 
+export function mapFkProperty(
+  row: Row,
+  rowIndex: number,
+  helpers: {
+    monthsBySourceKey: Map<string, CleaningMonth[]>;
+    arbvolBySourceKey: Map<string, Row[]>;
+    installationsBySourceKey: Map<string, GenesisBundleInstallation[]>;
+  },
+): GenesisBundleProperty {
+  const sourceKey = buildSourceKey(row.GKuG, row.GKuS, row.GKuH, row.GKuZ);
+  const postalCity = parsePostalCity(row.GPLZOrt);
+  const street = [clean(row.GStrasse), clean(row.GHausNr)].filter(Boolean).join(' ');
+  const building = buildingTypeFrom(clean(row.GGebErg) || clean(row.GGebBez));
+  const arbvolRows = helpers.arbvolBySourceKey.get(sourceKey) ?? [];
+  const installations = helpers.installationsBySourceKey.get(sourceKey) ?? [];
+  const fireSystemCodes = [
+    ...new Set([
+      ...parseFireSystemCodes(row.GMo, ...arbvolRows.map((item) => item.AVInfo)),
+      ...installations.flatMap((installation) => parseFireSystemCodes(installation.systemCode, installation.label)),
+    ]),
+  ];
+  const fuelTypes = [
+    ...new Set([
+      ...parseFuelTypes(row.GGebBez, row.GGebErg, ...arbvolRows.map((item) => item.AVInfo)),
+      ...installations.flatMap((installation) => installation.fuelTypes),
+    ]),
+  ];
+
+  return {
+    sourceKey,
+    sourceSystem: 'genesis',
+    isActive: true,
+    lastImportedAt: '',
+    customerNumber: sourceKey,
+    propertyLabel: clean(row.GPerson),
+    street,
+    postalCode: postalCity.postalCode,
+    city: postalCity.city,
+    buildingType: building.buildingType,
+    otherBuildingType: building.otherBuildingType,
+    owner: clean(row.Rech1),
+    tenant: '',
+    management: clean(row.Rech2),
+    caretaker: '',
+    billingRole: '',
+    notificationRole: '',
+    fuelTypes: FUEL_TYPES.filter((fuel) => fuelTypes.includes(fuel)),
+    fireSystemCodes: FIRE_SYSTEM_CODES.filter((code) => fireSystemCodes.includes(code)),
+    oilBoiler: '',
+    kwh: installations.find((installation) => installation.kwh)?.kwh ?? '',
+    buildYear: installations.find((installation) => installation.buildYear)?.buildYear ?? '',
+    tour: clean(row.GTour) || clean(row.GTour2) || clean(arbvolRows[0]?.AVTour),
+    cleaningMonths: [
+      ...new Set([
+        ...parseMonths(row.GMo),
+        ...(helpers.monthsBySourceKey.get(sourceKey) ?? []),
+      ]),
+    ],
+    notes: joinLines([clean(row.GBem1), clean(row.GBem2), clean(row.GIntBem), 'Fallback-Liegenschaft aus FKSTAMM/GebStamm.']),
+    rawRefs: {
+      FKGrundID: Number(row.FKGrundID) || null,
+      KFDGrundID: Number(row.KFDGrundID) || null,
+      rowIndex: rowIndex + 1,
+      fallback: 'FKSTAMM.GebStamm',
+    },
+  };
+}
+
+export function mapArbvolFallbackProperty(sourceKey: string, rows: Row[]): GenesisBundleProperty {
+  const first = rows[0] ?? {};
+  const postalCity = parsePostalCity(first.AVGPLZOrt);
+  const street = [clean(first.AVGStrasse), clean(first.AVGHausNr)].filter(Boolean).join(' ');
+  const fireSystemCodes = parseFireSystemCodes(...rows.map((row) => row.AVInfo));
+  const fuelTypes = parseFuelTypes(...rows.map((row) => row.AVInfo));
+  const cleaningMonths = parseMonths(...rows.map((row) => row.MonatNr));
+  const tours = [...new Set(rows.map((row) => clean(row.AVTour)).filter(Boolean))].join(' / ');
+
+  return {
+    sourceKey,
+    sourceSystem: 'genesis',
+    isActive: true,
+    lastImportedAt: '',
+    customerNumber: sourceKey,
+    propertyLabel: clean(first.AVGPerson),
+    street,
+    postalCode: postalCity.postalCode,
+    city: postalCity.city,
+    buildingType: '',
+    otherBuildingType: '',
+    owner: '',
+    tenant: '',
+    management: '',
+    caretaker: '',
+    billingRole: '',
+    notificationRole: '',
+    fuelTypes,
+    fireSystemCodes,
+    oilBoiler: '',
+    kwh: '',
+    buildYear: '',
+    tour: tours,
+    cleaningMonths,
+    notes: joinLines([
+      ...rows.flatMap((row) => [clean(row.AVBem1), clean(row.AVBem2)]),
+      'Fallback-Liegenschaft aus ARBVOL; in KFDSTAMM/GebStamm nicht vorhanden.',
+    ]),
+    rawRefs: {
+      fallback: 'ARBVOL.ArbVolumen',
+      rows: rows.length,
+    },
+  };
+}
+
+export function mapInvoiceFallbackProperty(invoice: GenesisBundleInvoice): GenesisBundleProperty {
+  const propertyAddressLines = invoice.propertyAddress.split('\n').map(clean).filter(Boolean);
+  const invoiceAddressLines = invoice.invoiceAddress.split('\n').map(clean).filter(Boolean);
+  const postalCity = parsePostalCity(propertyAddressLines[0] || invoiceAddressLines.find((line) => /^\d{4}\s+/.test(line)) || '');
+  const street = propertyAddressLines[1] || invoiceAddressLines.find((line) => !/^\d{4}\s+/.test(line)) || '';
+  const propertyLabel = propertyAddressLines[2] || invoiceAddressLines[1] || invoiceAddressLines[0] || '';
+
+  return {
+    sourceKey: invoice.sourceKey,
+    sourceSystem: 'genesis',
+    isActive: true,
+    lastImportedAt: '',
+    customerNumber: invoice.sourceKey,
+    propertyLabel,
+    street,
+    postalCode: postalCity.postalCode,
+    city: postalCity.city,
+    buildingType: '',
+    otherBuildingType: '',
+    owner: invoiceAddressLines.join('\n'),
+    tenant: '',
+    management: '',
+    caretaker: '',
+    billingRole: '',
+    notificationRole: '',
+    fuelTypes: [],
+    fireSystemCodes: [],
+    oilBoiler: '',
+    kwh: '',
+    buildYear: '',
+    tour: '',
+    cleaningMonths: [],
+    notes: `Fallback-Liegenschaft aus Rechnung ${invoice.invoiceNumber}; in KFDSTAMM/GebStamm nicht vorhanden.`,
+    rawRefs: {
+      fallback: 'OPSTAMM.OP',
+      invoiceNumber: invoice.invoiceNumber,
+    },
+  };
+}
+
 export function mapInstallation(row: Row): GenesisBundleInstallation {
   const sourceKey = buildSourceKey(row.FKuG, row.FKuS, row.FKuH, row.FKuZ);
   const fuels = parseFuelTypes(row.FBst1, row.FBst2, row.FBst3);
@@ -382,6 +581,9 @@ export function mapPlannedWork(row: Row, rowIndex: number): GenesisBundlePlanned
     workKey: `${sourceKey}-ARBVOL-${clean(row.MonatNr) || '0'}-${rowIndex + 1}`,
     source: 'arbvol',
     tariffCode: '',
+    lineType: 'text',
+    invoiceNumber: '',
+    position: '',
     month,
     tour: clean(row.AVTour),
     quantity: '',
@@ -412,9 +614,20 @@ function isTechnicalTariffLine(code: string): boolean {
   );
 }
 
-function shouldKeepTariffLine(row: Row, code: string, description: string): boolean {
+function lineTypeForTariff(code: string, amount: unknown, quantity: unknown): GenesisWorkLineType {
   if (isTechnicalTariffLine(code)) {
-    return false;
+    return 'control';
+  }
+  if (code.toLowerCase() === 'ft' || (!parseAmount(amount) && !parseAmount(quantity))) {
+    return 'text';
+  }
+  return 'charge';
+}
+
+function shouldKeepTariffLine(row: Row, code: string, description: string): boolean {
+  const lineType = lineTypeForTariff(code, row.TPreis, row.TAnz);
+  if (lineType === 'control') {
+    return Boolean(description || code);
   }
   if (code.toLowerCase() === 'ft') {
     return Boolean(description);
@@ -438,6 +651,7 @@ export function mapTariffSuggestion(
   const ownText = clean(row.TTBez);
   const notes = clean(row.TTBem);
   const description = ownText || catalogText || notes;
+  const lineType = lineTypeForTariff(tariffCode, row.TPreis, row.TAnz);
 
   if (!shouldKeepTariffLine(row, tariffCode, description)) {
     return null;
@@ -455,8 +669,11 @@ export function mapTariffSuggestion(
   return {
     sourceKey,
     workKey: `${sourceKey}-GTARIF-${clean(row.TPos) || rowIndex + 1}-${tariffCode || 'frei'}`,
-    source: 'tariff',
+    source: 'objectTariff',
     tariffCode,
+    lineType,
+    invoiceNumber: '',
+    position: clean(row.TPos),
     month: '',
     tour: '',
     quantity,
@@ -467,7 +684,11 @@ export function mapTariffSuggestion(
     unitPrice: formatDecimal(unitPriceValue, 2),
     taxPoints: formatDecimal(taxPointValue, 2),
     confidence: ownText ? 92 : catalogText ? 84 : 68,
-    reason: ownText ? 'Objekttarif mit objektspezifischer Bezeichnung' : 'Tarifkatalog-Bezeichnung aus Genesis',
+    reason: lineType === 'control'
+      ? 'Kontrollzeile aus Genesis-Objekttarif'
+      : ownText
+        ? 'Aktueller Objekttarif mit objektspezifischer Bezeichnung'
+        : 'Aktueller Objekttarif aus Genesis-Tarifkatalog',
     notes,
     raw: row,
   };
@@ -488,8 +709,234 @@ export function mapHistory(row: Row, rowIndex: number): GenesisBundleHistoryEntr
   };
 }
 
+function addressFromParts(parts: unknown[]): string {
+  return joinLines(parts.map(clean).filter(Boolean));
+}
+
+export function mapInvoice(row: Row, rechDiversByNumber: Map<number, Row>): GenesisBundleInvoice {
+  const invoiceNumber = clean(row.OPNr);
+  const sourceKey = buildSourceKey(row.OPG, row.OPS, row.OPH, row.OPZ);
+  const divers = rechDiversByNumber.get(Number(row.OPNr));
+  const netAmount = formatMoney(row.OPNetto || divers?.RNetto);
+  const vatAmount = formatMoney(row.OPMwst || divers?.RMWST1);
+  const totalAmount = formatMoney(row.OPBetrag || divers?.RTotal);
+  const paidAmount = formatMoney(row.OPZBetrag);
+
+  return {
+    sourceKey,
+    invoiceKey: `${sourceKey}-INVOICE-${invoiceNumber}`,
+    invoiceNumber,
+    workDate: normalizeDate(row.OPADat),
+    invoiceDate: normalizeDate(row.OPRDat),
+    dueDate: normalizeDate(row.OPFDat),
+    paidDate: normalizeDate(row.OPZDat),
+    status: invoiceStatus(row.OPBetrag || divers?.RTotal, row.OPZBetrag, row.OPZDat),
+    dunningLevel: clean(row.OPMStufe),
+    netAmount,
+    vatAmount,
+    totalAmount,
+    paidAmount,
+    invoiceAddress: addressFromParts([
+      row.OPR1,
+      row.OPR2,
+      row.OPR3,
+      row.OPR4,
+      row.OPR5,
+      row.OPR6,
+      row.OPR7,
+      row.OPR8,
+      row.OPR9,
+      row.OPR10,
+      divers?.RAdr1,
+      divers?.RAdr2,
+      divers?.RAdr3,
+      divers?.RAdr4,
+      divers?.RAdr5,
+      divers?.RAdr6,
+      divers?.RAdr7,
+      divers?.RAdr8,
+    ]),
+    propertyAddress: addressFromParts([
+      divers?.RLieg1,
+      divers?.RLieg2,
+      divers?.RLieg3,
+      divers?.RLieg4,
+    ]),
+    notes: clean(row.OPReBem),
+    raw: { op: row, rechDivers: divers ?? null },
+  };
+}
+
+export function mapInvoiceLine(row: Row, invoice: GenesisBundleInvoice): GenesisBundleInvoiceLine {
+  const tariffCode = clean(row.RechTarif);
+  const quantity = parseAmount(row.RechAnz) > 0 ? formatQuantity(row.RechAnz) : '';
+  const amount = formatMoney(row.RechPreis);
+  const lineType = lineTypeForTariff(tariffCode, row.RechPreis, row.RechAnz);
+  const position = clean(row.RechPos);
+
+  return {
+    sourceKey: invoice.sourceKey,
+    invoiceNumber: invoice.invoiceNumber,
+    lineKey: `${invoice.sourceKey}-INVOICE-${invoice.invoiceNumber}-LINE-${position || '0'}`,
+    position,
+    lineType,
+    tariffCode,
+    marker: clean(row.RechKz),
+    quantity,
+    description: clean(row.RechTBez) || tariffCode || 'Rechnungsposition',
+    unitPrice: formatUnitPriceFromAmount(row.RechPreis, row.RechAnz),
+    amount,
+    taxPoints: '',
+    notes: '',
+    raw: row,
+  };
+}
+
+export function mapKfkInvoiceLine(row: Row, invoice: GenesisBundleInvoice): GenesisBundleInvoiceLine {
+  const quantity = parseAmount(row.PossAnz) > 0 ? formatQuantity(row.PossAnz) : '';
+  const amount = formatMoney(row.PossPreis);
+  const position = clean(row.PossNr);
+  const description = clean(row.PossBez);
+  const lineType: GenesisWorkLineType = amount || quantity ? 'charge' : 'text';
+
+  return {
+    sourceKey: invoice.sourceKey,
+    invoiceNumber: invoice.invoiceNumber,
+    lineKey: `${invoice.sourceKey}-KFK-INVOICE-${invoice.invoiceNumber}-LINE-${position || '0'}`,
+    position,
+    lineType,
+    tariffCode: '',
+    marker: '',
+    quantity,
+    description: description || 'Rechnungsposition',
+    unitPrice: formatUnitPriceFromAmount(row.PossPreis, row.PossAnz),
+    amount,
+    taxPoints: '',
+    notes: clean(row.PossMWST) ? `MWST ${clean(row.PossMWST)}` : '',
+    raw: row,
+  };
+}
+
+function plannedWorkFromInvoiceLine(line: GenesisBundleInvoiceLine): GenesisBundlePlannedWork {
+  return {
+    sourceKey: line.sourceKey,
+    workKey: `${line.lineKey}-SUGGESTION`,
+    source: 'invoiceLine',
+    tariffCode: line.tariffCode,
+    lineType: line.lineType,
+    invoiceNumber: line.invoiceNumber,
+    position: line.position,
+    month: '',
+    tour: '',
+    quantity: line.quantity,
+    description: line.description,
+    tp: line.taxPoints,
+    amount: line.amount,
+    minutes: line.tariffCode === '60+01' ? line.quantity : '',
+    unitPrice: line.unitPrice,
+    taxPoints: line.taxPoints,
+    confidence: line.lineType === 'charge' ? 88 : line.lineType === 'text' ? 72 : 35,
+    reason: `Aus Rechnung ${line.invoiceNumber}`,
+    notes: line.lineType === 'control' ? 'Kontrollzeile aus Rechnung, nicht als abrechenbare Position verwenden.' : '',
+    raw: line.raw,
+  };
+}
+
+function latestInvoiceNumbersBySourceKey(invoices: GenesisBundleInvoice[]): Set<string> {
+  const latestBySourceKey = new Map<string, GenesisBundleInvoice>();
+  for (const invoice of invoices) {
+    const current = latestBySourceKey.get(invoice.sourceKey);
+    const invoiceDate = invoice.workDate || invoice.invoiceDate || invoice.invoiceNumber;
+    const currentDate = current ? current.workDate || current.invoiceDate || current.invoiceNumber : '';
+    if (!current || invoiceDate.localeCompare(currentDate) > 0) {
+      latestBySourceKey.set(invoice.sourceKey, invoice);
+    }
+  }
+  return new Set([...latestBySourceKey.values()].map((invoice) => invoice.invoiceNumber));
+}
+
+function safePathSegment(value: string): string {
+  return clean(value).replace(/[^A-Za-z0-9._-]+/g, '_') || 'unnamed';
+}
+
+function normalizedZipPath(entryName: string): string {
+  return entryName.replace(/\\/g, '/');
+}
+
+function pdfKindForPath(normalizedPath: string): GenesisPdfDocumentKind {
+  const basename = normalizedPath.split('/').pop() ?? normalizedPath;
+  if (/^\d+-rechnung\.pdf$/i.test(basename)) {
+    return 'invoice';
+  }
+  if (/^\d+-mahnung/i.test(basename)) {
+    return 'reminder';
+  }
+  if (/^\d+-zahlungserinnerung/i.test(basename)) {
+    return 'paymentReminder';
+  }
+  if (/rapport/i.test(basename)) {
+    return 'rapport';
+  }
+  if (normalizedPath.toLowerCase().startsWith('export/')) {
+    return 'export';
+  }
+  return 'other';
+}
+
+function invoiceNumberFromPdfName(fileName: string): string {
+  return clean(fileName.match(/^(\d+)-(?:rechnung|mahnung|zahlungserinnerung)/i)?.[1] ?? '');
+}
+
+function rapportInfoFromPdfName(fileName: string): { sourceKey: string; date: string } {
+  const match = fileName.match(/^(\d+)-(\d+)-(.+)-([^-]+)-\d+-Rapport[^-]*-(\d{8})?\.pdf$/i);
+  if (!match) {
+    return { sourceKey: '', date: '' };
+  }
+  return {
+    sourceKey: buildSourceKey(match[1], match[2], match[3], match[4]),
+    date: normalizeCompactDate(match[5] ?? ''),
+  };
+}
+
+export function mapPdfDocument(
+  entryName: string,
+  knownInvoiceNumbers: Set<string>,
+  knownSourceKeys: Set<string>,
+): GenesisBundlePdfDocument | null {
+  if (!/\.pdf$/i.test(entryName)) {
+    return null;
+  }
+
+  const normalizedPath = normalizedZipPath(entryName);
+  const fileName = normalizedPath.split('/').pop() ?? normalizedPath;
+  const kind = pdfKindForPath(normalizedPath);
+  const invoiceNumber = invoiceNumberFromPdfName(fileName);
+  const rapportInfo = kind === 'rapport' ? rapportInfoFromPdfName(fileName) : { sourceKey: '', date: '' };
+  const sourceKey = invoiceNumber ? '' : rapportInfo.sourceKey;
+  const safeRelativePath = ['pdfs', ...normalizedPath.split('/').map(safePathSegment)].join('/');
+  const matched = invoiceNumber ? knownInvoiceNumbers.has(invoiceNumber) : Boolean(sourceKey && knownSourceKeys.has(sourceKey));
+
+  return {
+    sourceKey,
+    documentKey: `${kind}-${invoiceNumber || sourceKey || 'global'}-${safePathSegment(fileName)}`,
+    kind,
+    relativePath: safeRelativePath,
+    archivePath: entryName,
+    fileName,
+    invoiceNumber,
+    date: rapportInfo.date,
+    matched,
+    raw: { archivePath: entryName },
+  };
+}
+
 async function readZipDatabase(zip: JSZip, fileName: string, warnings: string[]): Promise<TableMap> {
-  const entryPath = Object.keys(zip.files).find((candidate) => candidate.toLowerCase().endsWith(`/daten/${fileName.toLowerCase()}`) || candidate.toLowerCase() === `daten/${fileName.toLowerCase()}`);
+  const entryPath = findGenesisDatabaseEntryPath(
+    Object.entries(zip.files)
+      .filter(([, entry]) => !entry.dir)
+      .map(([entryName]) => entryName),
+    fileName,
+  );
   if (!entryPath) {
     warnings.push(`${fileName} fehlt im Genesis-ZIP.`);
     return {};
@@ -506,6 +953,31 @@ async function readZipDatabase(zip: JSZip, fileName: string, warnings: string[])
     }
   }
   return tables;
+}
+
+export function findGenesisDatabaseEntryPath(entryNames: string[], fileName: string): string | null {
+  const targetFileName = fileName.toLowerCase();
+  const candidates = entryNames
+    .map((entryName) => {
+      const normalizedPath = entryName.replace(/\\/g, '/');
+      const normalizedLower = normalizedPath.toLowerCase();
+      const basename = normalizedLower.split('/').pop() ?? '';
+      return {
+        entryName,
+        normalizedLower,
+        basename,
+      };
+    })
+    .filter((entry) => entry.basename === targetFileName);
+
+  if (!candidates.length) {
+    return null;
+  }
+
+  const dataEntry = candidates.find((entry) => entry.normalizedLower.startsWith('daten/'))
+    ?? candidates.find((entry) => entry.normalizedLower.includes('/daten/'));
+
+  return (dataEntry ?? candidates[0]).entryName;
 }
 
 function tableCountsFor(fileName: string, tables: TableMap): Record<string, number> {
@@ -587,7 +1059,12 @@ export async function convertGenesisZip(zipPath: string): Promise<ConverterResul
   const kfdTables = databases['KFDSTAMM.MDB'] ?? {};
   const arbvolRows = databases['ARBVOL.MDB']?.ArbVolumen ?? [];
   const addressTables = databases['Anschriften.MDB'] ?? {};
+  const fkPropertyRows = databases['FKSTAMM.MDB']?.GebStamm ?? [];
   const fkRows = databases['FKSTAMM.MDB']?.FestStoff ?? [];
+  const opRows = databases['OPSTAMM.MDB']?.OP ?? [];
+  const opInvoiceLineRows = databases['OPSTAMM.MDB']?.RechPos ?? [];
+  const rechDiversRows = databases['KFKRECH.MDB']?.RechDivers ?? [];
+  const kfkInvoiceLineRows = databases['KFKRECH.MDB']?.RechZeilen ?? [];
 
   const installations = fkRows.map(mapInstallation);
   const installationSourceKeys = new Set(installations.map((item) => item.sourceKey));
@@ -602,14 +1079,80 @@ export async function convertGenesisZip(zipPath: string): Promise<ConverterResul
     installationsBySourceKey: groupInstallations(installations),
   };
 
-  const properties = (kfdTables.GebStamm ?? []).map((row, index) => mapKfdProperty(row, index, helpers));
-  const propertySourceKeys = new Set(properties.map((property) => property.sourceKey));
   const plannedWork = arbvolRows.map(mapPlannedWork);
   const tariffCatalog = new Map((kfdTables.Tarife ?? []).map((row) => [clean(row.TKurz).toLowerCase(), row]));
   const tariffSuggestions = (kfdTables.GTarife ?? [])
     .map((row, index) => mapTariffSuggestion(row, tariffCatalog, index))
     .filter((item): item is GenesisBundlePlannedWork => Boolean(item));
+  const rechDiversByNumber = new Map(rechDiversRows.map((row) => [Number(row.OPRechNr), row]));
+  const invoices = opRows
+    .map((row) => mapInvoice(row, rechDiversByNumber))
+    .filter((invoice) => invoice.invoiceNumber && invoice.sourceKey);
+  const invoicesByNumber = new Map(invoices.map((invoice) => [invoice.invoiceNumber, invoice]));
+
+  const fallbackCounts = {
+    fk: 0,
+    arbvol: 0,
+    invoice: 0,
+  };
+  const propertyMap = new Map<string, GenesisBundleProperty>();
+  for (const [index, row] of (kfdTables.GebStamm ?? []).entries()) {
+    const property = mapKfdProperty(row, index, helpers);
+    propertyMap.set(property.sourceKey, property);
+  }
+  for (const [index, row] of fkPropertyRows.entries()) {
+    const property = mapFkProperty(row, index, helpers);
+    if (!propertyMap.has(property.sourceKey)) {
+      propertyMap.set(property.sourceKey, property);
+      fallbackCounts.fk += 1;
+    }
+  }
+  for (const [sourceKey, rows] of helpers.arbvolBySourceKey.entries()) {
+    if (!propertyMap.has(sourceKey)) {
+      propertyMap.set(sourceKey, mapArbvolFallbackProperty(sourceKey, rows));
+      fallbackCounts.arbvol += 1;
+    }
+  }
+  for (const invoice of invoices) {
+    if (!propertyMap.has(invoice.sourceKey)) {
+      propertyMap.set(invoice.sourceKey, mapInvoiceFallbackProperty(invoice));
+      fallbackCounts.invoice += 1;
+    }
+  }
+  const properties = [...propertyMap.values()];
+  const propertySourceKeys = new Set(properties.map((property) => property.sourceKey));
+
+  const invoiceLines = opInvoiceLineRows
+    .map((row) => {
+      const invoice = invoicesByNumber.get(clean(row.RechNr));
+      return invoice ? mapInvoiceLine(row, invoice) : null;
+    })
+    .filter((line): line is GenesisBundleInvoiceLine => Boolean(line));
+  const invoiceLineKeys = new Set(invoiceLines.map((line) => `${line.invoiceNumber}-${line.position}`));
+  for (const row of kfkInvoiceLineRows) {
+    const invoice = invoicesByNumber.get(clean(row.OPRechNr));
+    const key = `${clean(row.OPRechNr)}-${clean(row.PossNr)}`;
+    if (invoice && !invoiceLineKeys.has(key)) {
+      invoiceLines.push(mapKfkInvoiceLine(row, invoice));
+      invoiceLineKeys.add(key);
+    }
+  }
+  const latestInvoiceNumbers = latestInvoiceNumbersBySourceKey(invoices);
+  const invoiceLineSuggestions = invoiceLines
+    .filter((line) => latestInvoiceNumbers.has(line.invoiceNumber))
+    .map(plannedWorkFromInvoiceLine);
   const history = (kfdTables.Archiv ?? []).map(mapHistory);
+  const pdfDocuments = Object.entries(zip.files)
+    .filter(([, entry]) => !entry.dir)
+    .map(([entryName]) => mapPdfDocument(entryName, new Set(invoicesByNumber.keys()), propertySourceKeys))
+    .filter((document): document is GenesisBundlePdfDocument => Boolean(document));
+  const documentCounts = pdfDocuments.reduce<Record<string, number>>((counts, document) => {
+    counts[document.kind] = (counts[document.kind] ?? 0) + 1;
+    if (!document.matched) {
+      counts.unmatched = (counts.unmatched ?? 0) + 1;
+    }
+    return counts;
+  }, {});
 
   for (const sourceKey of installationSourceKeys) {
     if (!propertySourceKeys.has(sourceKey)) {
@@ -621,20 +1164,42 @@ export async function convertGenesisZip(zipPath: string): Promise<ConverterResul
       warnings.push(`Arbeitsvolumen verweist auf nicht importierte Liegenschaft ${item.sourceKey}.`);
     }
   }
+  for (const invoice of invoices) {
+    if (!propertySourceKeys.has(invoice.sourceKey)) {
+      warnings.push(`Rechnung ${invoice.invoiceNumber} verweist auf nicht importierte Liegenschaft ${invoice.sourceKey}.`);
+    }
+  }
+  if (fallbackCounts.fk) {
+    warnings.push(`${fallbackCounts.fk} ${fallbackCounts.fk === 1 ? 'Liegenschaft wurde' : 'Liegenschaften wurden'} aus FKSTAMM/GebStamm ergänzt.`);
+  }
+  if (fallbackCounts.arbvol) {
+    warnings.push(`${fallbackCounts.arbvol} Liegenschaften wurden nur aus ARBVOL ergänzt.`);
+  }
+  if (fallbackCounts.invoice) {
+    warnings.push(`${fallbackCounts.invoice} Liegenschaften wurden nur aus Rechnungsdaten ergänzt.`);
+  }
+  const unmatchedPdfCount = pdfDocuments.filter((document) => !document.matched).length;
+  if (unmatchedPdfCount) {
+    warnings.push(`${unmatchedPdfCount} PDF-Dokumente konnten keiner Liegenschaft/Rechnung eindeutig zugeordnet werden.`);
+  }
 
   return {
     bundle: {
-      schemaVersion: 'genesis-bundle.v1',
+      schemaVersion: 'genesis-bundle.v2',
       metadata: {
         exportedAt: new Date().toISOString(),
         converterVersion: CONVERTER_VERSION,
         sourceFileName: path.basename(sourcePath),
         tableCounts,
+        documentCounts,
         warnings,
       },
       properties,
       installations,
-      plannedWork: [...tariffSuggestions, ...plannedWork],
+      plannedWork: [...tariffSuggestions, ...invoiceLineSuggestions, ...plannedWork],
+      invoices,
+      invoiceLines,
+      pdfDocuments,
       history,
     },
     audit: {

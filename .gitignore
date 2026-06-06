@@ -28,6 +28,9 @@ yarn-error.*
 artifacts/
 .desktop-build/
 genesis-export-v1.json
+genesis-export-v2.json
+genesis-mobile-export/
+genesis-mobile-export.zip
 Daten.zip
 *.MDB
 *.mdb

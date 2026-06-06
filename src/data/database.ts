@@ -7,9 +7,12 @@ import type {
   GenesisBundleProperty,
   GenesisBundleV1,
   GenesisHistoryEntry,
+  GenesisInvoice,
+  GenesisInvoiceLine,
   GenesisImportResult,
   GenesisImportRun,
   GenesisInstallation,
+  GenesisPdfDocument,
   GenesisPlannedWork,
   GenesisPropertyContext,
   ImportResult,
@@ -117,6 +120,9 @@ type GenesisPlannedWorkRow = {
   work_key: string;
   source: string;
   tariff_code: string;
+  line_type: string;
+  invoice_number: string;
+  position: string;
   month: string;
   tour: string;
   quantity: string;
@@ -129,6 +135,60 @@ type GenesisPlannedWorkRow = {
   confidence: number;
   reason: string;
   notes: string;
+};
+
+type GenesisInvoiceRow = {
+  id: string;
+  property_id: string;
+  source_key: string;
+  invoice_key: string;
+  invoice_number: string;
+  work_date: string;
+  invoice_date: string;
+  due_date: string;
+  paid_date: string;
+  status: string;
+  dunning_level: string;
+  net_amount: string;
+  vat_amount: string;
+  total_amount: string;
+  paid_amount: string;
+  invoice_address: string;
+  property_address: string;
+  notes: string;
+};
+
+type GenesisInvoiceLineRow = {
+  id: string;
+  property_id: string;
+  source_key: string;
+  invoice_number: string;
+  line_key: string;
+  position: string;
+  line_type: string;
+  tariff_code: string;
+  marker: string;
+  quantity: string;
+  description: string;
+  unit_price: string;
+  amount: string;
+  tax_points: string;
+  notes: string;
+};
+
+type GenesisPdfDocumentRow = {
+  id: string;
+  property_id: string;
+  source_key: string;
+  document_key: string;
+  kind: string;
+  relative_path: string;
+  archive_path: string;
+  local_uri: string;
+  file_name: string;
+  invoice_number: string;
+  date: string;
+  matched: number;
 };
 
 type GenesisHistoryRow = {
@@ -151,6 +211,9 @@ type WebStore = {
   genesisImportRuns: GenesisImportRun[];
   genesisInstallations: GenesisInstallation[];
   genesisPlannedWork: GenesisPlannedWork[];
+  genesisInvoices: GenesisInvoice[];
+  genesisInvoiceLines: GenesisInvoiceLine[];
+  genesisPdfDocuments: GenesisPdfDocument[];
   genesisHistory: GenesisHistoryEntry[];
 };
 
@@ -280,6 +343,9 @@ export async function initDatabase(): Promise<SQLiteDatabase | null> {
           work_key TEXT NOT NULL DEFAULT '',
           source TEXT NOT NULL DEFAULT 'arbvol',
           tariff_code TEXT NOT NULL DEFAULT '',
+          line_type TEXT NOT NULL DEFAULT 'charge',
+          invoice_number TEXT NOT NULL DEFAULT '',
+          position TEXT NOT NULL DEFAULT '',
           month TEXT NOT NULL DEFAULT '',
           tour TEXT NOT NULL DEFAULT '',
           quantity TEXT NOT NULL DEFAULT '',
@@ -298,6 +364,74 @@ export async function initDatabase(): Promise<SQLiteDatabase | null> {
         );
         CREATE INDEX IF NOT EXISTS idx_genesis_planned_work_property
           ON genesis_planned_work(property_id, source_key);
+
+        CREATE TABLE IF NOT EXISTS genesis_invoices (
+          id TEXT PRIMARY KEY NOT NULL,
+          property_id TEXT NOT NULL,
+          source_key TEXT NOT NULL,
+          invoice_key TEXT NOT NULL DEFAULT '',
+          invoice_number TEXT NOT NULL DEFAULT '',
+          work_date TEXT NOT NULL DEFAULT '',
+          invoice_date TEXT NOT NULL DEFAULT '',
+          due_date TEXT NOT NULL DEFAULT '',
+          paid_date TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'unknown',
+          dunning_level TEXT NOT NULL DEFAULT '',
+          net_amount TEXT NOT NULL DEFAULT '',
+          vat_amount TEXT NOT NULL DEFAULT '',
+          total_amount TEXT NOT NULL DEFAULT '',
+          paid_amount TEXT NOT NULL DEFAULT '',
+          invoice_address TEXT NOT NULL DEFAULT '',
+          property_address TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          raw_json TEXT NOT NULL DEFAULT '{}',
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (property_id) REFERENCES customer_properties(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_genesis_invoices_property
+          ON genesis_invoices(property_id, invoice_number, work_date);
+
+        CREATE TABLE IF NOT EXISTS genesis_invoice_lines (
+          id TEXT PRIMARY KEY NOT NULL,
+          property_id TEXT NOT NULL,
+          source_key TEXT NOT NULL,
+          invoice_number TEXT NOT NULL DEFAULT '',
+          line_key TEXT NOT NULL DEFAULT '',
+          position TEXT NOT NULL DEFAULT '',
+          line_type TEXT NOT NULL DEFAULT 'charge',
+          tariff_code TEXT NOT NULL DEFAULT '',
+          marker TEXT NOT NULL DEFAULT '',
+          quantity TEXT NOT NULL DEFAULT '',
+          description TEXT NOT NULL DEFAULT '',
+          unit_price TEXT NOT NULL DEFAULT '',
+          amount TEXT NOT NULL DEFAULT '',
+          tax_points TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          raw_json TEXT NOT NULL DEFAULT '{}',
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (property_id) REFERENCES customer_properties(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_genesis_invoice_lines_property
+          ON genesis_invoice_lines(property_id, invoice_number, position);
+
+        CREATE TABLE IF NOT EXISTS genesis_pdf_documents (
+          id TEXT PRIMARY KEY NOT NULL,
+          property_id TEXT NOT NULL DEFAULT '',
+          source_key TEXT NOT NULL DEFAULT '',
+          document_key TEXT NOT NULL DEFAULT '',
+          kind TEXT NOT NULL DEFAULT 'other',
+          relative_path TEXT NOT NULL DEFAULT '',
+          archive_path TEXT NOT NULL DEFAULT '',
+          local_uri TEXT NOT NULL DEFAULT '',
+          file_name TEXT NOT NULL DEFAULT '',
+          invoice_number TEXT NOT NULL DEFAULT '',
+          date TEXT NOT NULL DEFAULT '',
+          matched INTEGER NOT NULL DEFAULT 0,
+          raw_json TEXT NOT NULL DEFAULT '{}',
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_genesis_pdf_documents_property
+          ON genesis_pdf_documents(property_id, source_key, invoice_number);
 
         CREATE TABLE IF NOT EXISTS genesis_history (
           id TEXT PRIMARY KEY NOT NULL,
@@ -324,6 +458,9 @@ export async function initDatabase(): Promise<SQLiteDatabase | null> {
       await ensureColumn(db, 'customer_properties', 'last_imported_at', "TEXT NOT NULL DEFAULT ''");
       await ensureColumn(db, 'genesis_planned_work', 'source', "TEXT NOT NULL DEFAULT 'arbvol'");
       await ensureColumn(db, 'genesis_planned_work', 'tariff_code', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn(db, 'genesis_planned_work', 'line_type', "TEXT NOT NULL DEFAULT 'charge'");
+      await ensureColumn(db, 'genesis_planned_work', 'invoice_number', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn(db, 'genesis_planned_work', 'position', "TEXT NOT NULL DEFAULT ''");
       await ensureColumn(db, 'genesis_planned_work', 'unit_price', "TEXT NOT NULL DEFAULT ''");
       await ensureColumn(db, 'genesis_planned_work', 'tax_points', "TEXT NOT NULL DEFAULT ''");
       await ensureColumn(db, 'genesis_planned_work', 'confidence', 'INTEGER NOT NULL DEFAULT 0');
@@ -356,6 +493,9 @@ function emptyWebStore(): WebStore {
     genesisImportRuns: [],
     genesisInstallations: [],
     genesisPlannedWork: [],
+    genesisInvoices: [],
+    genesisInvoiceLines: [],
+    genesisPdfDocuments: [],
     genesisHistory: [],
   };
 }
@@ -379,6 +519,9 @@ function readWebStore(): WebStore {
       genesisImportRuns: Array.isArray(parsed.genesisImportRuns) ? parsed.genesisImportRuns : [],
       genesisInstallations: Array.isArray(parsed.genesisInstallations) ? parsed.genesisInstallations : [],
       genesisPlannedWork: Array.isArray(parsed.genesisPlannedWork) ? parsed.genesisPlannedWork : [],
+      genesisInvoices: Array.isArray(parsed.genesisInvoices) ? parsed.genesisInvoices : [],
+      genesisInvoiceLines: Array.isArray(parsed.genesisInvoiceLines) ? parsed.genesisInvoiceLines : [],
+      genesisPdfDocuments: Array.isArray(parsed.genesisPdfDocuments) ? parsed.genesisPdfDocuments : [],
       genesisHistory: Array.isArray(parsed.genesisHistory) ? parsed.genesisHistory : [],
     };
   } catch {
@@ -515,13 +658,17 @@ function mapGenesisInstallation(row: GenesisInstallationRow): GenesisInstallatio
 }
 
 function mapGenesisPlannedWork(row: GenesisPlannedWorkRow): GenesisPlannedWork {
+  const source = normalizeSuggestionSource(row.source);
   return {
     id: row.id,
     propertyId: row.property_id,
     sourceKey: row.source_key,
     workKey: row.work_key,
-    source: row.source === 'tariff' || row.source === 'history' ? row.source : 'arbvol',
+    source,
     tariffCode: row.tariff_code,
+    lineType: row.line_type ? normalizeLineType(row.line_type) : defaultLineTypeForSource(source),
+    invoiceNumber: row.invoice_number,
+    position: row.position,
     month: row.month as GenesisPlannedWork['month'],
     tour: row.tour,
     quantity: row.quantity,
@@ -537,14 +684,39 @@ function mapGenesisPlannedWork(row: GenesisPlannedWorkRow): GenesisPlannedWork {
   };
 }
 
+function normalizeSuggestionSource(source: unknown): GenesisPlannedWork['source'] {
+  if (source === 'tariff' || source === 'objectTariff') {
+    return 'objectTariff';
+  }
+  if (source === 'invoiceLine') {
+    return 'invoiceLine';
+  }
+  if (source === 'history') {
+    return 'history';
+  }
+  return 'arbvol';
+}
+
+function normalizeLineType(lineType: unknown): GenesisPlannedWork['lineType'] {
+  return lineType === 'text' || lineType === 'control' ? lineType : 'charge';
+}
+
+function defaultLineTypeForSource(source: GenesisPlannedWork['source']): GenesisPlannedWork['lineType'] {
+  return source === 'arbvol' || source === 'history' ? 'text' : 'charge';
+}
+
 function normalizePlannedWorkItem(
   item: Partial<GenesisPlannedWork> & { sourceKey: string; workKey: string },
 ): Omit<GenesisPlannedWork, 'id' | 'propertyId'> {
+  const source = normalizeSuggestionSource(item.source);
   return {
     sourceKey: compact(item.sourceKey),
     workKey: compact(item.workKey),
-    source: item.source === 'tariff' || item.source === 'history' ? item.source : 'arbvol',
+    source,
     tariffCode: compact(item.tariffCode ?? ''),
+    lineType: item.lineType ? normalizeLineType(item.lineType) : defaultLineTypeForSource(source),
+    invoiceNumber: compact(item.invoiceNumber ?? ''),
+    position: compact(item.position ?? ''),
     month: item.month ?? '',
     tour: compact(item.tour ?? ''),
     quantity: compact(item.quantity ?? ''),
@@ -572,6 +744,130 @@ function mapGenesisHistory(row: GenesisHistoryRow): GenesisHistoryEntry {
     amount: row.amount,
     minutes: row.minutes,
     notes: row.notes,
+  };
+}
+
+function mapGenesisInvoice(row: GenesisInvoiceRow): GenesisInvoice {
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    sourceKey: row.source_key,
+    invoiceKey: row.invoice_key,
+    invoiceNumber: row.invoice_number,
+    workDate: row.work_date,
+    invoiceDate: row.invoice_date,
+    dueDate: row.due_date,
+    paidDate: row.paid_date,
+    status: row.status === 'open' || row.status === 'paid' || row.status === 'partial' ? row.status : 'unknown',
+    dunningLevel: row.dunning_level,
+    netAmount: row.net_amount,
+    vatAmount: row.vat_amount,
+    totalAmount: row.total_amount,
+    paidAmount: row.paid_amount,
+    invoiceAddress: row.invoice_address,
+    propertyAddress: row.property_address,
+    notes: row.notes,
+  };
+}
+
+function mapGenesisInvoiceLine(row: GenesisInvoiceLineRow): GenesisInvoiceLine {
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    sourceKey: row.source_key,
+    invoiceNumber: row.invoice_number,
+    lineKey: row.line_key,
+    position: row.position,
+    lineType: normalizeLineType(row.line_type),
+    tariffCode: row.tariff_code,
+    marker: row.marker,
+    quantity: row.quantity,
+    description: row.description,
+    unitPrice: row.unit_price,
+    amount: row.amount,
+    taxPoints: row.tax_points,
+    notes: row.notes,
+  };
+}
+
+function mapGenesisPdfDocument(row: GenesisPdfDocumentRow): GenesisPdfDocument {
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    sourceKey: row.source_key,
+    documentKey: row.document_key,
+    kind: row.kind === 'invoice' || row.kind === 'reminder' || row.kind === 'paymentReminder' || row.kind === 'rapport' || row.kind === 'export'
+      ? row.kind
+      : 'other',
+    relativePath: row.relative_path,
+    archivePath: row.archive_path,
+    localUri: row.local_uri,
+    fileName: row.file_name,
+    invoiceNumber: row.invoice_number,
+    date: row.date,
+    matched: row.matched !== 0,
+  };
+}
+
+function normalizeInvoiceItem(
+  item: Partial<GenesisInvoice> & { sourceKey: string; invoiceKey: string; invoiceNumber: string },
+): Omit<GenesisInvoice, 'id' | 'propertyId'> {
+  return {
+    sourceKey: compact(item.sourceKey),
+    invoiceKey: compact(item.invoiceKey),
+    invoiceNumber: compact(item.invoiceNumber),
+    workDate: compact(item.workDate ?? ''),
+    invoiceDate: compact(item.invoiceDate ?? ''),
+    dueDate: compact(item.dueDate ?? ''),
+    paidDate: compact(item.paidDate ?? ''),
+    status: item.status === 'open' || item.status === 'paid' || item.status === 'partial' ? item.status : 'unknown',
+    dunningLevel: compact(item.dunningLevel ?? ''),
+    netAmount: compact(item.netAmount ?? ''),
+    vatAmount: compact(item.vatAmount ?? ''),
+    totalAmount: compact(item.totalAmount ?? ''),
+    paidAmount: compact(item.paidAmount ?? ''),
+    invoiceAddress: compact(item.invoiceAddress ?? ''),
+    propertyAddress: compact(item.propertyAddress ?? ''),
+    notes: compact(item.notes ?? ''),
+  };
+}
+
+function normalizeInvoiceLineItem(
+  item: Partial<GenesisInvoiceLine> & { sourceKey: string; invoiceNumber: string; lineKey: string },
+): Omit<GenesisInvoiceLine, 'id' | 'propertyId'> {
+  return {
+    sourceKey: compact(item.sourceKey),
+    invoiceNumber: compact(item.invoiceNumber),
+    lineKey: compact(item.lineKey),
+    position: compact(item.position ?? ''),
+    lineType: normalizeLineType(item.lineType),
+    tariffCode: compact(item.tariffCode ?? ''),
+    marker: compact(item.marker ?? ''),
+    quantity: compact(item.quantity ?? ''),
+    description: compact(item.description ?? ''),
+    unitPrice: compact(item.unitPrice ?? ''),
+    amount: compact(item.amount ?? ''),
+    taxPoints: compact(item.taxPoints ?? ''),
+    notes: compact(item.notes ?? ''),
+  };
+}
+
+function normalizePdfDocumentItem(
+  item: Partial<GenesisPdfDocument> & { documentKey: string; relativePath: string },
+): Omit<GenesisPdfDocument, 'id' | 'propertyId'> {
+  return {
+    sourceKey: compact(item.sourceKey ?? ''),
+    documentKey: compact(item.documentKey),
+    kind: item.kind === 'invoice' || item.kind === 'reminder' || item.kind === 'paymentReminder' || item.kind === 'rapport' || item.kind === 'export'
+      ? item.kind
+      : 'other',
+    relativePath: compact(item.relativePath),
+    archivePath: compact(item.archivePath ?? ''),
+    localUri: compact(item.localUri ?? ''),
+    fileName: compact(item.fileName ?? ''),
+    invoiceNumber: compact(item.invoiceNumber ?? ''),
+    date: compact(item.date ?? ''),
+    matched: Boolean(item.matched),
   };
 }
 
@@ -1040,6 +1336,9 @@ export async function importGenesisBundle(
       inactive: 0,
       installations: 0,
       plannedWork: 0,
+      invoices: 0,
+      invoiceLines: 0,
+      pdfDocuments: 0,
       history: 0,
       warnings: [...bundle.metadata.warnings],
     };
@@ -1088,6 +1387,9 @@ export async function importGenesisBundle(
     const importedPropertyIds = new Set(propertyIdsBySource.values());
     store.genesisInstallations = store.genesisInstallations.filter((item) => !importedPropertyIds.has(item.propertyId));
     store.genesisPlannedWork = store.genesisPlannedWork.filter((item) => !importedPropertyIds.has(item.propertyId));
+    store.genesisInvoices = store.genesisInvoices.filter((item) => !importedPropertyIds.has(item.propertyId));
+    store.genesisInvoiceLines = store.genesisInvoiceLines.filter((item) => !importedPropertyIds.has(item.propertyId));
+    store.genesisPdfDocuments = store.genesisPdfDocuments.filter((item) => item.propertyId && !importedPropertyIds.has(item.propertyId));
     store.genesisHistory = store.genesisHistory.filter((item) => !importedPropertyIds.has(item.propertyId));
 
     for (const item of bundle.installations) {
@@ -1108,6 +1410,32 @@ export async function importGenesisBundle(
       result.plannedWork += 1;
     }
 
+    for (const item of bundle.invoices ?? []) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey);
+      if (!propertyId) {
+        continue;
+      }
+      store.genesisInvoices.push({ ...normalizeInvoiceItem(item), id: createId('inv'), propertyId });
+      result.invoices += 1;
+    }
+
+    const propertyIdByInvoiceNumber = new Map(store.genesisInvoices.map((invoice) => [invoice.invoiceNumber, invoice.propertyId]));
+
+    for (const item of bundle.invoiceLines ?? []) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey) ?? propertyIdByInvoiceNumber.get(item.invoiceNumber);
+      if (!propertyId) {
+        continue;
+      }
+      store.genesisInvoiceLines.push({ ...normalizeInvoiceLineItem(item), id: createId('iline'), propertyId });
+      result.invoiceLines += 1;
+    }
+
+    for (const item of bundle.pdfDocuments ?? []) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey) ?? propertyIdByInvoiceNumber.get(item.invoiceNumber) ?? '';
+      store.genesisPdfDocuments.push({ ...normalizePdfDocumentItem(item), id: createId('pdf'), propertyId });
+      result.pdfDocuments += 1;
+    }
+
     for (const item of bundle.history) {
       const propertyId = propertyIdsBySource.get(item.sourceKey);
       if (!propertyId) {
@@ -1125,8 +1453,8 @@ export async function importGenesisBundle(
       schemaVersion: bundle.schemaVersion,
       converterVersion: bundle.metadata.converterVersion,
       propertiesCount: bundle.properties.length,
-      installationsCount: result.installations,
-      plannedWorkCount: result.plannedWork,
+    installationsCount: result.installations,
+    plannedWorkCount: result.plannedWork,
       historyCount: result.history,
       inactiveCount: result.inactive,
       warnings: result.warnings,
@@ -1150,6 +1478,9 @@ export async function importGenesisBundle(
     inactive: 0,
     installations: 0,
     plannedWork: 0,
+    invoices: 0,
+    invoiceLines: 0,
+    pdfDocuments: 0,
     history: 0,
     warnings: [...bundle.metadata.warnings],
   };
@@ -1177,6 +1508,9 @@ export async function importGenesisBundle(
       propertyIdsBySource.set(normalized.sourceKey, upsert.id);
       await db.runAsync('DELETE FROM genesis_installations WHERE property_id = ?', upsert.id);
       await db.runAsync('DELETE FROM genesis_planned_work WHERE property_id = ?', upsert.id);
+      await db.runAsync('DELETE FROM genesis_invoices WHERE property_id = ?', upsert.id);
+      await db.runAsync('DELETE FROM genesis_invoice_lines WHERE property_id = ?', upsert.id);
+      await db.runAsync('DELETE FROM genesis_pdf_documents WHERE property_id = ?', upsert.id);
       await db.runAsync('DELETE FROM genesis_history WHERE property_id = ?', upsert.id);
     }
 
@@ -1193,6 +1527,8 @@ export async function importGenesisBundle(
         result.inactive += 1;
       }
     }
+
+    await db.runAsync("DELETE FROM genesis_pdf_documents WHERE property_id = ''");
 
     for (const item of bundle.installations) {
       const propertyId = propertyIdsBySource.get(item.sourceKey);
@@ -1234,10 +1570,10 @@ export async function importGenesisBundle(
       await db.runAsync(
         `
           INSERT INTO genesis_planned_work (
-            id, property_id, source_key, work_key, source, tariff_code, month, tour, quantity,
-            description, tp, amount, minutes, unit_price, tax_points, confidence, reason,
-            notes, raw_json, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            id, property_id, source_key, work_key, source, tariff_code, line_type, invoice_number,
+            position, month, tour, quantity, description, tp, amount, minutes, unit_price,
+            tax_points, confidence, reason, notes, raw_json, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         createId('plan'),
         propertyId,
@@ -1245,6 +1581,9 @@ export async function importGenesisBundle(
         plannedItem.workKey,
         plannedItem.source,
         plannedItem.tariffCode,
+        plannedItem.lineType,
+        plannedItem.invoiceNumber,
+        plannedItem.position,
         compact(plannedItem.month),
         plannedItem.tour,
         plannedItem.quantity,
@@ -1261,6 +1600,112 @@ export async function importGenesisBundle(
         timestamp,
       );
       result.plannedWork += 1;
+    }
+
+    for (const item of bundle.invoices ?? []) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey);
+      if (!propertyId) {
+        continue;
+      }
+      const invoice = normalizeInvoiceItem(item);
+      await db.runAsync(
+        `
+          INSERT INTO genesis_invoices (
+            id, property_id, source_key, invoice_key, invoice_number, work_date, invoice_date,
+            due_date, paid_date, status, dunning_level, net_amount, vat_amount, total_amount,
+            paid_amount, invoice_address, property_address, notes, raw_json, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        createId('inv'),
+        propertyId,
+        invoice.sourceKey,
+        invoice.invoiceKey,
+        invoice.invoiceNumber,
+        invoice.workDate,
+        invoice.invoiceDate,
+        invoice.dueDate,
+        invoice.paidDate,
+        invoice.status,
+        invoice.dunningLevel,
+        invoice.netAmount,
+        invoice.vatAmount,
+        invoice.totalAmount,
+        invoice.paidAmount,
+        invoice.invoiceAddress,
+        invoice.propertyAddress,
+        invoice.notes,
+        JSON.stringify(item.raw ?? {}),
+        timestamp,
+      );
+      result.invoices += 1;
+    }
+
+    const invoiceRowsForLookup = await db.getAllAsync<{ property_id: string; invoice_number: string }>(
+      'SELECT property_id, invoice_number FROM genesis_invoices',
+    );
+    const propertyIdByInvoiceNumber = new Map(invoiceRowsForLookup.map((invoice) => [invoice.invoice_number, invoice.property_id]));
+
+    for (const item of bundle.invoiceLines ?? []) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey) ?? propertyIdByInvoiceNumber.get(item.invoiceNumber);
+      if (!propertyId) {
+        continue;
+      }
+      const line = normalizeInvoiceLineItem(item);
+      await db.runAsync(
+        `
+          INSERT INTO genesis_invoice_lines (
+            id, property_id, source_key, invoice_number, line_key, position, line_type,
+            tariff_code, marker, quantity, description, unit_price, amount, tax_points,
+            notes, raw_json, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        createId('iline'),
+        propertyId,
+        line.sourceKey,
+        line.invoiceNumber,
+        line.lineKey,
+        line.position,
+        line.lineType,
+        line.tariffCode,
+        line.marker,
+        line.quantity,
+        line.description,
+        line.unitPrice,
+        line.amount,
+        line.taxPoints,
+        line.notes,
+        JSON.stringify(item.raw ?? {}),
+        timestamp,
+      );
+      result.invoiceLines += 1;
+    }
+
+    for (const item of bundle.pdfDocuments ?? []) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey) ?? propertyIdByInvoiceNumber.get(item.invoiceNumber) ?? '';
+      const document = normalizePdfDocumentItem(item);
+      await db.runAsync(
+        `
+          INSERT INTO genesis_pdf_documents (
+            id, property_id, source_key, document_key, kind, relative_path, archive_path,
+            local_uri, file_name, invoice_number, date, matched, raw_json, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        createId('pdf'),
+        propertyId,
+        document.sourceKey,
+        document.documentKey,
+        document.kind,
+        document.relativePath,
+        document.archivePath,
+        document.localUri,
+        document.fileName,
+        document.invoiceNumber,
+        document.date,
+        document.matched ? 1 : 0,
+        JSON.stringify(item.raw ?? {}),
+        timestamp,
+      );
+      result.pdfDocuments += 1;
     }
 
     for (const item of bundle.history) {
@@ -1340,10 +1785,22 @@ export async function getGenesisContext(propertyId: string): Promise<GenesisProp
     const plannedWork = store.genesisPlannedWork
       .filter((item) => item.propertyId === propertyId)
       .map((item) => ({ ...normalizePlannedWorkItem(item), id: item.id, propertyId: item.propertyId }));
+    const invoices = store.genesisInvoices
+      .filter((item) => item.propertyId === propertyId)
+      .sort((a, b) => (b.workDate || b.invoiceDate || b.invoiceNumber).localeCompare(a.workDate || a.invoiceDate || a.invoiceNumber));
     return {
       importRun: store.genesisImportRuns[0] ?? null,
       installations: store.genesisInstallations.filter((item) => item.propertyId === propertyId),
-      tariffSuggestions: plannedWork.filter((item) => item.source === 'tariff'),
+      invoices,
+      invoiceLines: store.genesisInvoiceLines
+        .filter((item) => item.propertyId === propertyId)
+        .sort((a, b) => a.invoiceNumber.localeCompare(b.invoiceNumber) || Number(a.position) - Number(b.position)),
+      pdfDocuments: store.genesisPdfDocuments
+        .filter((item) => item.propertyId === propertyId)
+        .sort((a, b) => (b.date || b.invoiceNumber).localeCompare(a.date || a.invoiceNumber)),
+      objectTariffSuggestions: plannedWork.filter((item) => item.source === 'objectTariff'),
+      invoiceLineSuggestions: plannedWork.filter((item) => item.source === 'invoiceLine'),
+      tariffSuggestions: plannedWork.filter((item) => item.source === 'objectTariff'),
       arbvolSummary: plannedWork.filter((item) => item.source === 'arbvol'),
       plannedWork,
       history: store.genesisHistory
@@ -1357,7 +1814,7 @@ export async function getGenesisContext(propertyId: string): Promise<GenesisProp
   if (!db) {
     throw new Error('Datenbank nicht verfuegbar.');
   }
-  const [runRow, installationRows, plannedRows, historyRows] = await Promise.all([
+  const [runRow, installationRows, plannedRows, invoiceRows, invoiceLineRows, pdfDocumentRows, historyRows] = await Promise.all([
     db.getFirstAsync<GenesisImportRunRow>('SELECT * FROM genesis_import_runs ORDER BY imported_at DESC LIMIT 1'),
     db.getAllAsync<GenesisInstallationRow>(
       'SELECT * FROM genesis_installations WHERE property_id = ? ORDER BY installation_key, label',
@@ -1365,6 +1822,18 @@ export async function getGenesisContext(propertyId: string): Promise<GenesisProp
     ),
     db.getAllAsync<GenesisPlannedWorkRow>(
       'SELECT * FROM genesis_planned_work WHERE property_id = ? ORDER BY month, work_key',
+      propertyId,
+    ),
+    db.getAllAsync<GenesisInvoiceRow>(
+      'SELECT * FROM genesis_invoices WHERE property_id = ? ORDER BY COALESCE(work_date, invoice_date, invoice_number) DESC',
+      propertyId,
+    ),
+    db.getAllAsync<GenesisInvoiceLineRow>(
+      'SELECT * FROM genesis_invoice_lines WHERE property_id = ? ORDER BY invoice_number DESC, CAST(position AS INTEGER), line_key',
+      propertyId,
+    ),
+    db.getAllAsync<GenesisPdfDocumentRow>(
+      'SELECT * FROM genesis_pdf_documents WHERE property_id = ? ORDER BY date DESC, invoice_number DESC, file_name',
       propertyId,
     ),
     db.getAllAsync<GenesisHistoryRow>(
@@ -1378,7 +1847,12 @@ export async function getGenesisContext(propertyId: string): Promise<GenesisProp
   return {
     importRun: runRow ? mapGenesisImportRun(runRow) : null,
     installations: installationRows.map(mapGenesisInstallation),
-    tariffSuggestions: plannedWork.filter((item) => item.source === 'tariff'),
+    invoices: invoiceRows.map(mapGenesisInvoice),
+    invoiceLines: invoiceLineRows.map(mapGenesisInvoiceLine),
+    pdfDocuments: pdfDocumentRows.map(mapGenesisPdfDocument),
+    objectTariffSuggestions: plannedWork.filter((item) => item.source === 'objectTariff'),
+    invoiceLineSuggestions: plannedWork.filter((item) => item.source === 'invoiceLine'),
+    tariffSuggestions: plannedWork.filter((item) => item.source === 'objectTariff'),
     arbvolSummary: plannedWork.filter((item) => item.source === 'arbvol'),
     plannedWork,
     history: historyRows.map(mapGenesisHistory),
