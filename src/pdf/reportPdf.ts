@@ -1,0 +1,250 @@
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+
+import { displayAddressRole, displayBuildingType, displayFuelTypes } from '../data/options';
+import type { ReportBundle } from '../types';
+import { formatDate } from '../utils/date';
+import { escapeHtml, joinAddress } from '../utils/text';
+
+function row(label: string, value: string): string {
+  return `
+    <div class="field">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || '-')}</strong>
+    </div>
+  `;
+}
+
+function multiline(label: string, value: string): string {
+  return `
+    <div class="multiline">
+      <span>${escapeHtml(label)}</span>
+      <p>${escapeHtml(value || '-').replace(/\n/g, '<br />')}</p>
+    </div>
+  `;
+}
+
+export function buildStructuredReport(bundle: ReportBundle): string {
+  return JSON.stringify(
+    {
+      schema: 'kamincontrolmobile.report.v1',
+      exportedAt: new Date().toISOString(),
+      property: bundle.property,
+      report: bundle.report,
+      workItems: bundle.workItems,
+    },
+    null,
+    2,
+  );
+}
+
+export function buildReportHtml(bundle: ReportBundle): string {
+  const { property, report, workItems } = bundle;
+  const address = joinAddress(property.street, property.postalCode, property.city);
+  const totalMinutes = workItems.reduce((sum, item) => {
+    const minutes = Number.parseFloat(item.minutes.replace(',', '.'));
+    return Number.isFinite(minutes) ? sum + minutes : sum;
+  }, 0);
+
+  return `
+    <!doctype html>
+    <html lang="de">
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          @page { margin: 26px; }
+          body {
+            color: #221f1b;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 12px;
+            line-height: 1.36;
+          }
+          h1 {
+            border-bottom: 2px solid #221f1b;
+            font-size: 22px;
+            margin: 0 0 14px;
+            padding-bottom: 8px;
+          }
+          h2 {
+            color: #24524a;
+            font-size: 14px;
+            margin: 18px 0 8px;
+          }
+          .grid {
+            display: grid;
+            gap: 8px;
+            grid-template-columns: repeat(2, 1fr);
+          }
+          .grid4 {
+            display: grid;
+            gap: 8px;
+            grid-template-columns: repeat(4, 1fr);
+          }
+          .field, .multiline {
+            border: 1px solid #d6cec0;
+            border-radius: 6px;
+            padding: 7px 8px;
+          }
+          .field span, .multiline span {
+            color: #6e665e;
+            display: block;
+            font-size: 10px;
+            margin-bottom: 3px;
+          }
+          .field strong {
+            font-size: 12px;
+            font-weight: 650;
+          }
+          .multiline p {
+            margin: 0;
+            min-height: 30px;
+          }
+          table {
+            border-collapse: collapse;
+            margin-top: 8px;
+            width: 100%;
+          }
+          th, td {
+            border: 1px solid #d6cec0;
+            padding: 7px;
+            text-align: left;
+            vertical-align: top;
+          }
+          th {
+            background: #ece7de;
+            color: #221f1b;
+            font-size: 10px;
+            text-transform: uppercase;
+          }
+          .meta {
+            color: #6e665e;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+          }
+          .signature {
+            display: grid;
+            gap: 18px;
+            grid-template-columns: repeat(3, 1fr);
+            margin-top: 28px;
+          }
+          .line {
+            border-top: 1px solid #221f1b;
+            padding-top: 6px;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Datenrapport Kaminfeger</h1>
+        <div class="meta">
+          <span>Rapport-ID: ${escapeHtml(report.id)}</span>
+          <span>Status: ${escapeHtml(report.status)}</span>
+        </div>
+
+        <h2>Liegenschaft</h2>
+        <div class="grid">
+          ${row('Kundennummer', property.customerNumber)}
+          ${row('Liegenschaft', property.propertyLabel || address)}
+          ${row('Adresse', address)}
+          ${row('Gebaeudeart', displayBuildingType(property.buildingType, property.otherBuildingType))}
+        </div>
+
+        <h2>Kontaktrollen</h2>
+        <div class="grid4">
+          ${multiline('Eigentuemer', property.owner)}
+          ${multiline('Mieter', property.tenant)}
+          ${multiline('Verwaltung', property.management)}
+          ${multiline('Hauswart', property.caretaker)}
+        </div>
+        <div class="grid" style="margin-top: 8px;">
+          ${row('Rechnungsadresse ist', displayAddressRole(property.billingRole))}
+          ${row('Avisierungsadresse ist', displayAddressRole(property.notificationRole))}
+        </div>
+
+        <h2>Feuerungsanlagen</h2>
+        <div class="grid">
+          ${row('Brennstoff', displayFuelTypes(property.fuelTypes))}
+          ${row('Anlagen im Haus', property.fireSystemCodes.join(', '))}
+          ${row('Oelheizung Kessel', property.oilBoiler)}
+          ${row('kWh', property.kwh)}
+          ${row('Baujahr', property.buildYear)}
+          ${row('Tour', property.tour)}
+          ${row('Reinigung in den Monaten', property.cleaningMonths.join(', '))}
+        </div>
+
+        <h2>Reinigung</h2>
+        <div class="grid">
+          ${row('Datum Reinigung', formatDate(report.cleaningDate))}
+          ${row('Uhrzeit', `${report.timeFrom || '-'} bis ${report.timeTo || '-'}`)}
+          ${row('Name Kaminfeger', report.chimneySweepName)}
+          ${row('Gesamtminuten', totalMinutes ? `${totalMinutes}` : '-')}
+        </div>
+
+        <h2>Arbeiten vor Ort</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Anzahl</th>
+              <th>Bezeichnung</th>
+              <th>TP</th>
+              <th>Betrag</th>
+              <th>Min.</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              workItems.length
+                ? workItems
+                    .map(
+                      (item) => `
+                        <tr>
+                          <td>${escapeHtml(item.quantity)}</td>
+                          <td>${escapeHtml(item.description)}</td>
+                          <td>${escapeHtml(item.tp)}</td>
+                          <td>${escapeHtml(item.amount)}</td>
+                          <td>${escapeHtml(item.minutes)}</td>
+                        </tr>
+                      `,
+                    )
+                    .join('')
+                : '<tr><td colspan="5">Keine Leistungspositionen erfasst.</td></tr>'
+            }
+          </tbody>
+        </table>
+
+        <h2>Bemerkungen</h2>
+        ${multiline('Bemerkungen', report.notes)}
+
+        <div class="signature">
+          <div class="line">Datum</div>
+          <div class="line">Name Kaminfeger</div>
+          <div class="line">Interner Abschluss</div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+export async function createReportPdf(bundle: ReportBundle): Promise<string> {
+  const { uri } = await Print.printToFileAsync({
+    html: buildReportHtml(bundle),
+    base64: false,
+  });
+
+  return uri;
+}
+
+export async function shareReportPdf(bundle: ReportBundle): Promise<string> {
+  const uri = await createReportPdf(bundle);
+  const available = await Sharing.isAvailableAsync();
+
+  if (available) {
+    await Sharing.shareAsync(uri, {
+      mimeType: 'application/pdf',
+      dialogTitle: 'Rapport teilen',
+      UTI: 'com.adobe.pdf',
+    });
+  }
+
+  return uri;
+}

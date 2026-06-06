@@ -1,0 +1,3 @@
+Kundennummer,Liegenschaft,Strasse,PLZ,Ort,Gebaeudeart,Eigentuemer,Mieter,Verwaltung,Hauswart,Rechnungsadresse ist,Avisierungsadresse ist,Brennstoff,Feuerungsanlagen,Oelheizung Kessel,kWh,Baujahr,Tour,Reinigung Monate
+1001-01,Haus Muster,Kirchgasse 12,8000,Zuerich,EFH,"Anna Muster, Kirchgasse 12, 8000 Zuerich",,,,"Eigentuemer","Eigentuemer","Holz;Oel","Ka;Oez;Of",Buderus Logano,24,1998,A1,"Jan;Juli"
+1002-02,Mehrfamilienhaus Linde,Lindenweg 8,8640,Rapperswil,MFH,"Erbengemeinschaft Linde","Mieter vor Ort","Immo Verwaltung AG, Bahnhofstrasse 4, 8640 Rapperswil","Peter Hauswart, 079 000 00 00","Verwaltung","Hauswart","Gas","Gz;He",,18,2012,B3,"Mrz;Sep"
