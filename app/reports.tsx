@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 
 import { Card } from '../src/components/Card';
@@ -7,14 +7,14 @@ import { Chips } from '../src/components/Chips';
 import { ReportCard } from '../src/components/ReportCard';
 import { Screen } from '../src/components/Screen';
 import { listReports } from '../src/data/database';
-import { colors, spacing, typography } from '../src/theme/theme';
+import { colors } from '../src/theme/theme';
 import type { ReportBundle, ReportStatus } from '../src/types';
 
 const filters: Array<{ value: ReportStatus | 'all'; label: string }> = [
-  { value: 'all', label: 'Alle' },
-  { value: 'draft', label: 'Entwürfe' },
+  { value: 'all',       label: 'Alle' },
+  { value: 'draft',     label: 'Entwürfe' },
   { value: 'completed', label: 'Abgeschlossen' },
-  { value: 'exported', label: 'Exportiert' },
+  { value: 'exported',  label: 'Exportiert' },
 ];
 
 export default function ReportsScreen() {
@@ -29,9 +29,7 @@ export default function ReportsScreen() {
   }, [filter]);
 
   useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
+    useCallback(() => { load(); }, [load]),
   );
 
   return (
@@ -44,9 +42,11 @@ export default function ReportsScreen() {
       />
 
       {loading ? (
-        <ActivityIndicator color={colors.primary} />
+        <View className="items-center py-6">
+          <ActivityIndicator color={colors.primary} />
+        </View>
       ) : reports.length ? (
-        <View style={styles.list}>
+        <View className="gap-2">
           {reports.map((bundle) => (
             <ReportCard
               key={bundle.report.id}
@@ -57,19 +57,9 @@ export default function ReportsScreen() {
         </View>
       ) : (
         <Card>
-          <Text style={styles.empty}>Keine Rapporte in dieser Ansicht.</Text>
+          <Text className="text-base text-muted">Keine Rapporte in dieser Ansicht.</Text>
         </Card>
       )}
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  list: {
-    gap: spacing.md,
-  },
-  empty: {
-    color: colors.muted,
-    fontSize: typography.body,
-  },
-});

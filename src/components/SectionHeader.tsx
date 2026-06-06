@@ -1,6 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
-
-import { colors, spacing, typography } from '../theme/theme';
+import { Text, View } from 'react-native';
 
 type Props = {
   title: string;
@@ -9,25 +7,13 @@ type Props = {
 
 export function SectionHeader({ title, meta }: Props) {
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.title}>{title}</Text>
-      {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+    <View className="border-t border-divider mt-2 pt-3 gap-0.5">
+      <View className="flex-row items-baseline justify-between gap-3">
+        <Text className="text-xl font-bold text-ink tracking-tight">{title}</Text>
+        {meta ? (
+          <Text className="text-small text-muted-light shrink text-right">{meta}</Text>
+        ) : null}
+      </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  title: {
-    color: colors.text,
-    fontSize: typography.h2,
-    fontWeight: '800',
-  },
-  meta: {
-    color: colors.muted,
-    fontSize: typography.small,
-  },
-});

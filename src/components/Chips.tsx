@@ -1,6 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-
-import { colors, radius, spacing, typography } from '../theme/theme';
+import { Pressable, Text, View } from 'react-native';
 
 export type ChipOption<T extends string> = {
   value: T;
@@ -20,68 +18,39 @@ export function Chips<T extends string>({ options, selected, onChange, multi = t
       onChange(selected.includes(value) ? [] : [value]);
       return;
     }
-
     onChange(
       selected.includes(value)
-        ? selected.filter((current) => current !== value)
+        ? selected.filter((c) => c !== value)
         : [...selected, value],
     );
   }
 
   return (
-    <View style={styles.wrap}>
+    <View className="flex-row flex-wrap gap-2">
       {options.map((option) => {
         const active = selected.includes(option.value);
         return (
           <Pressable
+            key={option.value}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
-            key={option.value}
             onPress={() => toggle(option.value)}
-            style={({ pressed }) => [
-              styles.chip,
-              active ? styles.active : null,
-              pressed ? styles.pressed : null,
-            ]}
+            className={[
+              'rounded-full min-h-[36px] px-4 py-1.5 items-center justify-center',
+              active
+                ? 'bg-primary'
+                : 'bg-surface border border-border',
+            ].join(' ')}
+            style={({ pressed }) => pressed ? { opacity: 0.75 } : undefined}
           >
-            <Text style={[styles.label, active ? styles.activeLabel : null]}>{option.label}</Text>
+            <Text
+              className={`text-small font-semibold ${active ? 'text-white' : 'text-muted'}`}
+            >
+              {option.label}
+            </Text>
           </Pressable>
         );
       })}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  active: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  label: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: '700',
-  },
-  activeLabel: {
-    color: colors.surface,
-  },
-});

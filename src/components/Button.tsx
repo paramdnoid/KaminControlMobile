@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 
-import { colors, radius, spacing, typography } from '../theme/theme';
+import { colors } from '../theme/theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
@@ -14,6 +14,27 @@ type Props = {
   disabled?: boolean;
   loading?: boolean;
   children?: ReactNode;
+};
+
+const variantClass: Record<ButtonVariant, string> = {
+  primary:   'bg-primary',
+  secondary: 'bg-primary-soft border border-primary',
+  ghost:     'bg-transparent border border-border',
+  danger:    'bg-danger',
+};
+
+const iconColor: Record<ButtonVariant, string> = {
+  primary:   colors.surface,
+  secondary: colors.primary,
+  ghost:     colors.primary,
+  danger:    colors.surface,
+};
+
+const labelClass: Record<ButtonVariant, string> = {
+  primary:   'text-white',
+  secondary: 'text-primary',
+  ghost:     'text-primary',
+  danger:    'text-white',
 };
 
 export function Button({
@@ -31,31 +52,22 @@ export function Button({
       accessibilityLabel={label}
       disabled={disabled || loading}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.base,
-        styles[variant],
-        pressed && !disabled ? styles.pressed : null,
-        disabled ? styles.disabled : null,
-      ]}
+      className={[
+        'flex-row items-center justify-center rounded-md min-h-[48px] px-4 py-3 gap-2',
+        variantClass[variant],
+        disabled ? 'opacity-40' : '',
+      ].join(' ')}
+      style={({ pressed }) => pressed && !disabled ? { opacity: 0.78, transform: [{ scale: 0.98 }] } : undefined}
     >
       {loading ? (
-        <ActivityIndicator
-          color={variant === 'primary' || variant === 'danger' ? colors.surface : colors.primary}
-        />
+        <ActivityIndicator color={iconColor[variant]} />
       ) : Icon ? (
-        <Icon
-          color={variant === 'primary' || variant === 'danger' ? colors.surface : colors.primary}
-          size={19}
-          strokeWidth={2.2}
-        />
+        <Icon color={iconColor[variant]} size={18} strokeWidth={2} />
       ) : null}
-      <View style={styles.labelWrap}>
+      <View className="shrink">
         <Text
           numberOfLines={2}
-          style={[
-            styles.label,
-            variant === 'primary' || variant === 'danger' ? styles.labelOnDark : styles.labelOnLight,
-          ]}
+          className={`text-base font-semibold text-center ${labelClass[variant]}`}
         >
           {label}
         </Text>
@@ -64,53 +76,3 @@ export function Button({
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  base: {
-    alignItems: 'center',
-    borderRadius: radius.md,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    justifyContent: 'center',
-    minHeight: 48,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  primary: {
-    backgroundColor: colors.primary,
-  },
-  secondary: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.border,
-    borderWidth: 1,
-  },
-  ghost: {
-    backgroundColor: 'transparent',
-    borderColor: colors.border,
-    borderWidth: 1,
-  },
-  danger: {
-    backgroundColor: colors.danger,
-  },
-  pressed: {
-    opacity: 0.82,
-    transform: [{ scale: 0.99 }],
-  },
-  disabled: {
-    opacity: 0.5,
-  },
-  labelWrap: {
-    flexShrink: 1,
-  },
-  label: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  labelOnDark: {
-    color: colors.surface,
-  },
-  labelOnLight: {
-    color: colors.primary,
-  },
-});
