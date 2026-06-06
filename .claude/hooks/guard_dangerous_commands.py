@@ -34,6 +34,15 @@ SENSITIVE_GLOBS = [
     "2026-06-01 - Sicherung Genesis - KOMPLETT - 001.zip",
 ]
 
+# Paths that match a sensitive glob above but are explicitly permitted.
+# Screenshots are UI captures, not customer data, so PNGs under artifacts/
+# are exempted (compared case-insensitively). Checked per path, so a command
+# that also touches a genuinely sensitive file is still blocked.
+ALLOWED_GLOBS = [
+    "artifacts/*.png",
+    "artifacts/**/*.png",
+]
+
 BLOCKED_REGEXES = [
     (r"(^|[;&|]\s*)rm\s+(-[^\s]*r[^\s]*\s+|--recursive\b)", "recursive remove"),
     (r"\bgit\s+reset\s+--hard\b", "git reset --hard"),
@@ -89,6 +98,8 @@ def command_mentions_sensitive_path(command: str) -> str | None:
 
     for candidate in candidates:
         normalized = candidate.replace("\\", "/").lstrip("./")
+        if any(fnmatch.fnmatch(normalized.lower(), allowed) for allowed in ALLOWED_GLOBS):
+            continue
         for pattern in SENSITIVE_GLOBS:
             if fnmatch.fnmatch(normalized, pattern) or fnmatch.fnmatch(Path(normalized).name, pattern):
                 return candidate
