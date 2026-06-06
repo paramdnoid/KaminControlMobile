@@ -33,6 +33,8 @@
     "@types/react": "~19.2.2",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "electron": "^42.3.3",
     "tsx": "^4.22.4",
     "typescript": "~6.0.3",
@@ -48,7 +50,8 @@
     "converter:build": "vite build --config desktop-converter/vite.config.ts",
     "converter:start": "npm run converter:build && NODE_OPTIONS=\"--require tsx/cjs\" electron desktop-converter/electron/main.ts",
     "converter:convert": "tsx desktop-converter/scripts/convert.ts",
-    "converter:test": "tsx desktop-converter/tests/genesisConverter.test.ts"
+    "converter:test": "tsx desktop-converter/tests/genesisConverter.test.ts",
+    "claude:validate-settings": "node .claude/hooks/validate_claude_settings_schema.cjs"
   },
   "private": true
 }

@@ -36,6 +36,11 @@ def validate_json() -> tuple[bool, str]:
     return True, "settings JSON ok"
 
 
+def validate_settings_schema() -> tuple[bool, str]:
+    ok, output = run(["npm", "run", "claude:validate-settings"], timeout=45)
+    return ok, output or "Claude settings schema validation ok"
+
+
 def validate_hooks_compile() -> tuple[bool, str]:
     failures = []
     for script in sorted(Path(".claude/hooks").glob("*.py")):
@@ -79,7 +84,7 @@ def validate_agent_skill_links() -> tuple[bool, str]:
 
 
 def config_gate() -> tuple[bool, str]:
-    checks = [validate_json, validate_hooks_compile, validate_agent_skill_links]
+    checks = [validate_json, validate_settings_schema, validate_hooks_compile, validate_agent_skill_links]
     messages = []
     for check in checks:
         ok, message = check()

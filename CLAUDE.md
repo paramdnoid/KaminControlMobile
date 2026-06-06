@@ -18,6 +18,7 @@
 - Converter build: `npm run converter:build`
 - Converter UI: `npm run converter:start`
 - Converter CLI: `npm run converter:convert -- <Daten.zip> <output.json>`
+- Claude settings schema: `npm run claude:validate-settings`
 
 ## Routing
 
@@ -43,7 +44,7 @@ Use the main thread as orchestrator. Specialists do not call other agents. When 
 
 ## Validation
 
-- Config-only changes: parse JSON, compile Python hooks, check agent skill links, run hook simulations, and `git diff --check -- CLAUDE.md .claude .gitignore`.
+- Config-only changes: parse JSON, run `npm run claude:validate-settings`, compile Python hooks, check agent skill links, run hook simulations, and `git diff --check -- CLAUDE.md .claude .gitignore`.
 - App or shared TypeScript changes: `npm run typecheck`.
 - Converter changes: `npm run typecheck`, `npm run converter:test`, and `npm run converter:build`.
 - PDF/report flow changes: include `npm run typecheck` and manually inspect generated HTML/JSON logic; no automated PDF regression suite exists yet.

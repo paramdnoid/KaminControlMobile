@@ -13,8 +13,7 @@
       "Write(./**)",
       "Bash",
       "Glob",
-      "Grep",
-      "LS"
+      "Grep"
     ],
     "deny": [
       "Read(./.env)",
