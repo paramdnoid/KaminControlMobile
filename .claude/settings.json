@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "autoMemoryEnabled": true,
+  "cleanupPeriodDays": 14,
+  "effortLevel": "high",
+  "includeGitInstructions": true,
+  "showTurnDuration": true,
+  "viewMode": "verbose",
+  "permissions": {
+    "allow": [
+      "Read(./**)",
+      "Edit(./**)",
+      "Write(./**)",
+      "Bash",
+      "Glob",
+      "Grep",
+      "LS"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./*.pem)",
+      "Read(./*.key)",
+      "Read(./*.p8)",
+      "Read(./*.p12)",
+      "Read(./*.jks)",
+      "Read(./artifacts/**)",
+      "Read(./pdfs/**)",
+      "Read(./dist/**)",
+      "Read(./.desktop-build/**)",
+      "Read(./genesis-export-v*.json)",
+      "Read(./genesis-mobile-export/**)",
+      "Read(./genesis-mobile-export.zip)",
+      "Read(./Daten.zip)",
+      "Read(./*.MDB)",
+      "Read(./*.mdb)",
+      "Edit(./artifacts/**)",
+      "Edit(./pdfs/**)",
+      "Edit(./dist/**)",
+      "Edit(./.desktop-build/**)",
+      "Edit(./genesis-export-v*.json)",
+      "Edit(./genesis-mobile-export/**)",
+      "Edit(./genesis-mobile-export.zip)",
+      "Edit(./Daten.zip)",
+      "Edit(./*.MDB)",
+      "Edit(./*.mdb)",
+      "Write(./artifacts/**)",
+      "Write(./pdfs/**)",
+      "Write(./dist/**)",
+      "Write(./.desktop-build/**)",
+      "Write(./genesis-export-v*.json)",
+      "Write(./genesis-mobile-export/**)",
+      "Write(./genesis-mobile-export.zip)",
+      "Write(./Daten.zip)",
+      "Write(./*.MDB)",
+      "Write(./*.mdb)",
+      "Bash(rm -rf *)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -fd*)",
+      "Bash(git checkout -- *)",
+      "Bash(git restore *)",
+      "Bash(sudo *)",
+      "Bash(chmod -R 777 *)",
+      "Bash(chown -R *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/guard_dangerous_commands.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/guard_sensitive_paths.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/mark_validation_needed.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/quality_gate_stop.py"
+          }
+        ]
+      }
+    ]
+  }
+}

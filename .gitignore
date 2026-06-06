@@ -41,6 +41,9 @@ Daten.zip
 
 # local env files
 .env*.local
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/tmp/
 
 # typescript
 *.tsbuildinfo
