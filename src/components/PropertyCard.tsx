@@ -32,6 +32,8 @@ export function PropertyCard({ property, onOpen, onCreateReport }: Props) {
           <Text style={styles.tag}>{displayBuildingType(property.buildingType, property.otherBuildingType)}</Text>
           <Text style={styles.tag}>{displayFuelTypes(property.fuelTypes)}</Text>
           {property.tour ? <Text style={styles.tag}>Tour {property.tour}</Text> : null}
+          {property.sourceSystem === 'genesis' ? <Text style={styles.genesisTag}>Genesis</Text> : null}
+          {property.isActive === false ? <Text style={styles.inactiveTag}>Inaktiv</Text> : null}
         </View>
       </Pressable>
       <Button label="Rapport starten" icon={FilePlus2} onPress={onCreateReport} variant="secondary" />
@@ -74,6 +76,24 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.small,
     fontWeight: '700',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  genesisTag: {
+    backgroundColor: colors.infoSoft,
+    borderRadius: 999,
+    color: colors.info,
+    fontSize: typography.small,
+    fontWeight: '800',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  inactiveTag: {
+    backgroundColor: colors.dangerSoft,
+    borderRadius: 999,
+    color: colors.danger,
+    fontSize: typography.small,
+    fontWeight: '800',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },

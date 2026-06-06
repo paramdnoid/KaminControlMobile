@@ -53,6 +53,10 @@ export type ReportStatus = 'draft' | 'completed' | 'exported';
 
 export type CustomerProperty = {
   id: string;
+  sourceKey?: string;
+  sourceSystem?: 'manual' | 'genesis';
+  isActive?: boolean;
+  lastImportedAt?: string;
   customerNumber: string;
   propertyLabel: string;
   street: string;
@@ -103,6 +107,73 @@ export type WorkItem = {
   sortOrder: number;
 };
 
+export type GenesisImportRun = {
+  id: string;
+  fileName: string;
+  importedAt: string;
+  exportedAt: string;
+  schemaVersion: string;
+  converterVersion: string;
+  propertiesCount: number;
+  installationsCount: number;
+  plannedWorkCount: number;
+  historyCount: number;
+  inactiveCount: number;
+  warnings: string[];
+  tableCounts: Record<string, number>;
+};
+
+export type GenesisInstallation = {
+  id: string;
+  propertyId: string;
+  sourceKey: string;
+  installationKey: string;
+  systemCode: string;
+  label: string;
+  fuelTypes: FuelType[];
+  manufacturer: string;
+  model: string;
+  buildYear: string;
+  kwh: string;
+  location: string;
+  notes: string;
+};
+
+export type GenesisPlannedWork = {
+  id: string;
+  propertyId: string;
+  sourceKey: string;
+  workKey: string;
+  month: CleaningMonth | '';
+  tour: string;
+  quantity: string;
+  description: string;
+  tp: string;
+  amount: string;
+  minutes: string;
+  notes: string;
+};
+
+export type GenesisHistoryEntry = {
+  id: string;
+  propertyId: string;
+  sourceKey: string;
+  historyKey: string;
+  date: string;
+  employee: string;
+  description: string;
+  amount: string;
+  minutes: string;
+  notes: string;
+};
+
+export type GenesisPropertyContext = {
+  importRun: GenesisImportRun | null;
+  installations: GenesisInstallation[];
+  plannedWork: GenesisPlannedWork[];
+  history: GenesisHistoryEntry[];
+};
+
 export type ReportBundle = {
   property: CustomerProperty;
   report: ServiceReport;
@@ -128,9 +199,60 @@ export type ImportResult = {
   skipped: number;
 };
 
+export type GenesisBundleProperty = Omit<CustomerProperty, 'id' | 'createdAt' | 'updatedAt'> & {
+  sourceKey: string;
+  sourceSystem: 'genesis';
+  isActive: boolean;
+  lastImportedAt: string;
+  notes?: string;
+  rawRefs?: Record<string, string | number | null>;
+};
+
+export type GenesisBundleInstallation = Omit<GenesisInstallation, 'id' | 'propertyId'> & {
+  raw?: Record<string, unknown>;
+};
+
+export type GenesisBundlePlannedWork = Omit<GenesisPlannedWork, 'id' | 'propertyId'> & {
+  raw?: Record<string, unknown>;
+};
+
+export type GenesisBundleHistoryEntry = Omit<GenesisHistoryEntry, 'id' | 'propertyId'> & {
+  raw?: Record<string, unknown>;
+};
+
+export type GenesisBundleV1 = {
+  schemaVersion: 'genesis-bundle.v1';
+  metadata: {
+    exportedAt: string;
+    converterVersion: string;
+    sourceFileName: string;
+    tableCounts: Record<string, number>;
+    warnings: string[];
+  };
+  properties: GenesisBundleProperty[];
+  installations: GenesisBundleInstallation[];
+  plannedWork: GenesisBundlePlannedWork[];
+  history: GenesisBundleHistoryEntry[];
+};
+
+export type GenesisBundlePreview = {
+  fileName: string;
+  bundle: GenesisBundleV1;
+  warnings: string[];
+};
+
+export type GenesisImportResult = ImportResult & {
+  inactive: number;
+  installations: number;
+  plannedWork: number;
+  history: number;
+  warnings: string[];
+};
+
 export type DashboardStats = {
   properties: number;
   drafts: number;
   completed: number;
   exported: number;
+  genesisImports: number;
 };

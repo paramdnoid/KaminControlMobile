@@ -4,6 +4,14 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type {
   CustomerProperty,
   DashboardStats,
+  GenesisBundleProperty,
+  GenesisBundleV1,
+  GenesisHistoryEntry,
+  GenesisImportResult,
+  GenesisImportRun,
+  GenesisInstallation,
+  GenesisPlannedWork,
+  GenesisPropertyContext,
   ImportResult,
   ReportBundle,
   ReportStatus,
@@ -16,6 +24,10 @@ import { compact } from '../utils/text';
 
 type PropertyRow = {
   id: string;
+  source_key: string;
+  source_system: string;
+  is_active: number;
+  last_imported_at: string;
   customer_number: string;
   property_label: string;
   street: string;
@@ -66,10 +78,74 @@ type WorkItemRow = {
   sort_order: number;
 };
 
+type GenesisImportRunRow = {
+  id: string;
+  file_name: string;
+  imported_at: string;
+  exported_at: string;
+  schema_version: string;
+  converter_version: string;
+  properties_count: number;
+  installations_count: number;
+  planned_work_count: number;
+  history_count: number;
+  inactive_count: number;
+  warnings_json: string;
+  table_counts_json: string;
+};
+
+type GenesisInstallationRow = {
+  id: string;
+  property_id: string;
+  source_key: string;
+  installation_key: string;
+  system_code: string;
+  label: string;
+  fuel_types_json: string;
+  manufacturer: string;
+  model: string;
+  build_year: string;
+  kwh: string;
+  location: string;
+  notes: string;
+};
+
+type GenesisPlannedWorkRow = {
+  id: string;
+  property_id: string;
+  source_key: string;
+  work_key: string;
+  month: string;
+  tour: string;
+  quantity: string;
+  description: string;
+  tp: string;
+  amount: string;
+  minutes: string;
+  notes: string;
+};
+
+type GenesisHistoryRow = {
+  id: string;
+  property_id: string;
+  source_key: string;
+  history_key: string;
+  date: string;
+  employee: string;
+  description: string;
+  amount: string;
+  minutes: string;
+  notes: string;
+};
+
 type WebStore = {
   properties: CustomerProperty[];
   reports: ServiceReport[];
   workItems: WorkItem[];
+  genesisImportRuns: GenesisImportRun[];
+  genesisInstallations: GenesisInstallation[];
+  genesisPlannedWork: GenesisPlannedWork[];
+  genesisHistory: GenesisHistoryEntry[];
 };
 
 const WEB_STORE_KEY = 'kamincontrolmobile.v1.store';
@@ -90,6 +166,10 @@ export async function initDatabase(): Promise<SQLiteDatabase | null> {
         PRAGMA foreign_keys = ON;
         CREATE TABLE IF NOT EXISTS customer_properties (
           id TEXT PRIMARY KEY NOT NULL,
+          source_key TEXT NOT NULL DEFAULT '',
+          source_system TEXT NOT NULL DEFAULT 'manual',
+          is_active INTEGER NOT NULL DEFAULT 1,
+          last_imported_at TEXT NOT NULL DEFAULT '',
           customer_number TEXT NOT NULL DEFAULT '',
           property_label TEXT NOT NULL DEFAULT '',
           street TEXT NOT NULL DEFAULT '',
@@ -115,6 +195,8 @@ export async function initDatabase(): Promise<SQLiteDatabase | null> {
         );
         CREATE INDEX IF NOT EXISTS idx_customer_properties_search
           ON customer_properties(customer_number, street, postal_code, city);
+        CREATE INDEX IF NOT EXISTS idx_customer_properties_source
+          ON customer_properties(source_system, source_key, is_active);
 
         CREATE TABLE IF NOT EXISTS service_reports (
           id TEXT PRIMARY KEY NOT NULL,
@@ -147,7 +229,87 @@ export async function initDatabase(): Promise<SQLiteDatabase | null> {
         );
         CREATE INDEX IF NOT EXISTS idx_work_items_report
           ON work_items(report_id, sort_order);
+
+        CREATE TABLE IF NOT EXISTS genesis_import_runs (
+          id TEXT PRIMARY KEY NOT NULL,
+          file_name TEXT NOT NULL DEFAULT '',
+          imported_at TEXT NOT NULL,
+          exported_at TEXT NOT NULL DEFAULT '',
+          schema_version TEXT NOT NULL DEFAULT '',
+          converter_version TEXT NOT NULL DEFAULT '',
+          properties_count INTEGER NOT NULL DEFAULT 0,
+          installations_count INTEGER NOT NULL DEFAULT 0,
+          planned_work_count INTEGER NOT NULL DEFAULT 0,
+          history_count INTEGER NOT NULL DEFAULT 0,
+          inactive_count INTEGER NOT NULL DEFAULT 0,
+          warnings_json TEXT NOT NULL DEFAULT '[]',
+          table_counts_json TEXT NOT NULL DEFAULT '{}'
+        );
+
+        CREATE TABLE IF NOT EXISTS genesis_installations (
+          id TEXT PRIMARY KEY NOT NULL,
+          property_id TEXT NOT NULL,
+          source_key TEXT NOT NULL,
+          installation_key TEXT NOT NULL DEFAULT '',
+          system_code TEXT NOT NULL DEFAULT '',
+          label TEXT NOT NULL DEFAULT '',
+          fuel_types_json TEXT NOT NULL DEFAULT '[]',
+          manufacturer TEXT NOT NULL DEFAULT '',
+          model TEXT NOT NULL DEFAULT '',
+          build_year TEXT NOT NULL DEFAULT '',
+          kwh TEXT NOT NULL DEFAULT '',
+          location TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          raw_json TEXT NOT NULL DEFAULT '{}',
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (property_id) REFERENCES customer_properties(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_genesis_installations_property
+          ON genesis_installations(property_id, source_key);
+
+        CREATE TABLE IF NOT EXISTS genesis_planned_work (
+          id TEXT PRIMARY KEY NOT NULL,
+          property_id TEXT NOT NULL,
+          source_key TEXT NOT NULL,
+          work_key TEXT NOT NULL DEFAULT '',
+          month TEXT NOT NULL DEFAULT '',
+          tour TEXT NOT NULL DEFAULT '',
+          quantity TEXT NOT NULL DEFAULT '',
+          description TEXT NOT NULL DEFAULT '',
+          tp TEXT NOT NULL DEFAULT '',
+          amount TEXT NOT NULL DEFAULT '',
+          minutes TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          raw_json TEXT NOT NULL DEFAULT '{}',
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (property_id) REFERENCES customer_properties(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_genesis_planned_work_property
+          ON genesis_planned_work(property_id, source_key);
+
+        CREATE TABLE IF NOT EXISTS genesis_history (
+          id TEXT PRIMARY KEY NOT NULL,
+          property_id TEXT NOT NULL,
+          source_key TEXT NOT NULL,
+          history_key TEXT NOT NULL DEFAULT '',
+          date TEXT NOT NULL DEFAULT '',
+          employee TEXT NOT NULL DEFAULT '',
+          description TEXT NOT NULL DEFAULT '',
+          amount TEXT NOT NULL DEFAULT '',
+          minutes TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          raw_json TEXT NOT NULL DEFAULT '{}',
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (property_id) REFERENCES customer_properties(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_genesis_history_property
+          ON genesis_history(property_id, source_key, date);
       `);
+
+      await ensureColumn(db, 'customer_properties', 'source_key', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn(db, 'customer_properties', 'source_system', "TEXT NOT NULL DEFAULT 'manual'");
+      await ensureColumn(db, 'customer_properties', 'is_active', 'INTEGER NOT NULL DEFAULT 1');
+      await ensureColumn(db, 'customer_properties', 'last_imported_at', "TEXT NOT NULL DEFAULT ''");
 
       return db;
     });
@@ -156,8 +318,28 @@ export async function initDatabase(): Promise<SQLiteDatabase | null> {
   return dbPromise;
 }
 
+async function ensureColumn(
+  db: SQLiteDatabase,
+  tableName: string,
+  columnName: string,
+  definition: string,
+): Promise<void> {
+  const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${tableName})`);
+  if (!columns.some((column) => column.name === columnName)) {
+    await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
 function emptyWebStore(): WebStore {
-  return { properties: [], reports: [], workItems: [] };
+  return {
+    properties: [],
+    reports: [],
+    workItems: [],
+    genesisImportRuns: [],
+    genesisInstallations: [],
+    genesisPlannedWork: [],
+    genesisHistory: [],
+  };
 }
 
 function readWebStore(): WebStore {
@@ -176,6 +358,10 @@ function readWebStore(): WebStore {
       properties: Array.isArray(parsed.properties) ? parsed.properties : [],
       reports: Array.isArray(parsed.reports) ? parsed.reports : [],
       workItems: Array.isArray(parsed.workItems) ? parsed.workItems : [],
+      genesisImportRuns: Array.isArray(parsed.genesisImportRuns) ? parsed.genesisImportRuns : [],
+      genesisInstallations: Array.isArray(parsed.genesisInstallations) ? parsed.genesisInstallations : [],
+      genesisPlannedWork: Array.isArray(parsed.genesisPlannedWork) ? parsed.genesisPlannedWork : [],
+      genesisHistory: Array.isArray(parsed.genesisHistory) ? parsed.genesisHistory : [],
     };
   } catch {
     return emptyWebStore();
@@ -199,6 +385,15 @@ function parseJsonArray<T extends string>(value: string): T[] {
   }
 }
 
+function parseJsonObject(value: string): Record<string, number> {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function toJsonArray(values: string[]): string {
   return JSON.stringify(values.filter(Boolean));
 }
@@ -206,6 +401,10 @@ function toJsonArray(values: string[]): string {
 function mapProperty(row: PropertyRow): CustomerProperty {
   return {
     id: row.id,
+    sourceKey: row.source_key,
+    sourceSystem: row.source_system === 'genesis' ? 'genesis' : 'manual',
+    isActive: row.is_active !== 0,
+    lastImportedAt: row.last_imported_at,
     customerNumber: row.customer_number,
     propertyLabel: row.property_label,
     street: row.street,
@@ -261,10 +460,125 @@ function mapWorkItem(row: WorkItemRow): WorkItem {
   };
 }
 
+function mapGenesisImportRun(row: GenesisImportRunRow): GenesisImportRun {
+  return {
+    id: row.id,
+    fileName: row.file_name,
+    importedAt: row.imported_at,
+    exportedAt: row.exported_at,
+    schemaVersion: row.schema_version,
+    converterVersion: row.converter_version,
+    propertiesCount: row.properties_count,
+    installationsCount: row.installations_count,
+    plannedWorkCount: row.planned_work_count,
+    historyCount: row.history_count,
+    inactiveCount: row.inactive_count,
+    warnings: parseJsonArray(row.warnings_json),
+    tableCounts: parseJsonObject(row.table_counts_json),
+  };
+}
+
+function mapGenesisInstallation(row: GenesisInstallationRow): GenesisInstallation {
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    sourceKey: row.source_key,
+    installationKey: row.installation_key,
+    systemCode: row.system_code,
+    label: row.label,
+    fuelTypes: parseJsonArray(row.fuel_types_json),
+    manufacturer: row.manufacturer,
+    model: row.model,
+    buildYear: row.build_year,
+    kwh: row.kwh,
+    location: row.location,
+    notes: row.notes,
+  };
+}
+
+function mapGenesisPlannedWork(row: GenesisPlannedWorkRow): GenesisPlannedWork {
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    sourceKey: row.source_key,
+    workKey: row.work_key,
+    month: row.month as GenesisPlannedWork['month'],
+    tour: row.tour,
+    quantity: row.quantity,
+    description: row.description,
+    tp: row.tp,
+    amount: row.amount,
+    minutes: row.minutes,
+    notes: row.notes,
+  };
+}
+
+function mapGenesisHistory(row: GenesisHistoryRow): GenesisHistoryEntry {
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    sourceKey: row.source_key,
+    historyKey: row.history_key,
+    date: row.date,
+    employee: row.employee,
+    description: row.description,
+    amount: row.amount,
+    minutes: row.minutes,
+    notes: row.notes,
+  };
+}
+
+function normalizeManualProperty(
+  property: Omit<CustomerProperty, 'id' | 'createdAt' | 'updatedAt'>,
+): Omit<CustomerProperty, 'id' | 'createdAt' | 'updatedAt'> {
+  return {
+    ...property,
+    sourceKey: compact(property.sourceKey ?? ''),
+    sourceSystem: property.sourceSystem ?? 'manual',
+    isActive: property.isActive ?? true,
+    lastImportedAt: compact(property.lastImportedAt ?? ''),
+    customerNumber: compact(property.customerNumber),
+    propertyLabel: compact(property.propertyLabel),
+    street: compact(property.street),
+    postalCode: compact(property.postalCode),
+    city: compact(property.city),
+    otherBuildingType: compact(property.otherBuildingType),
+    owner: compact(property.owner),
+    tenant: compact(property.tenant),
+    management: compact(property.management),
+    caretaker: compact(property.caretaker),
+    oilBoiler: compact(property.oilBoiler),
+    kwh: compact(property.kwh),
+    buildYear: compact(property.buildYear),
+    tour: compact(property.tour),
+  };
+}
+
+function normalizeGenesisProperty(
+  property: GenesisBundleProperty,
+  importedAt: string,
+): Omit<CustomerProperty, 'id' | 'createdAt' | 'updatedAt'> {
+  return normalizeManualProperty({
+    ...property,
+    sourceKey: compact(property.sourceKey),
+    sourceSystem: 'genesis',
+    isActive: true,
+    lastImportedAt: importedAt,
+  });
+}
+
 function findExistingWebPropertyId(
   store: WebStore,
   property: Omit<CustomerProperty, 'id' | 'createdAt' | 'updatedAt'>,
 ): string | null {
+  const sourceKey = compact(property.sourceKey ?? '');
+  if (sourceKey) {
+    const bySource = store.properties.find((existing) => existing.sourceKey === sourceKey);
+    if (bySource) {
+      return bySource.id;
+    }
+  }
+
   const customerNumber = compact(property.customerNumber);
   const street = compact(property.street);
   const postalCode = compact(property.postalCode);
@@ -314,10 +628,11 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   if (isWeb) {
     const store = readWebStore();
     return {
-      properties: store.properties.length,
+      properties: store.properties.filter((property) => property.isActive !== false).length,
       drafts: store.reports.filter((report) => report.status === 'draft').length,
       completed: store.reports.filter((report) => report.status === 'completed').length,
       exported: store.reports.filter((report) => report.status === 'exported').length,
+      genesisImports: store.genesisImportRuns.length,
     };
   }
 
@@ -325,8 +640,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   if (!db) {
     throw new Error('Datenbank nicht verfuegbar.');
   }
-  const [propertiesRow, reportsRow] = await Promise.all([
-    db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM customer_properties'),
+  const [propertiesRow, reportsRow, importsRow] = await Promise.all([
+    db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM customer_properties WHERE is_active = 1'),
     db.getFirstAsync<{ drafts: number; completed: number; exported: number }>(`
       SELECT
         SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) AS drafts,
@@ -334,6 +649,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         SUM(CASE WHEN status = 'exported' THEN 1 ELSE 0 END) AS exported
       FROM service_reports
     `),
+    db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM genesis_import_runs'),
   ]);
 
   return {
@@ -341,6 +657,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     drafts: reportsRow?.drafts ?? 0,
     completed: reportsRow?.completed ?? 0,
     exported: reportsRow?.exported ?? 0,
+    genesisImports: importsRow?.count ?? 0,
   };
 }
 
@@ -362,10 +679,13 @@ export async function listProperties(query = '', limit = 30): Promise<CustomerPr
           property.city,
           property.owner,
           property.tenant,
+          property.sourceKey ?? '',
         ].some((value) => value.toLowerCase().includes(lookup));
       })
       .sort((a, b) =>
-        `${a.city}${a.street}${a.customerNumber}`.localeCompare(`${b.city}${b.street}${b.customerNumber}`),
+        `${a.isActive === false ? 1 : 0}${a.city}${a.street}${a.customerNumber}`.localeCompare(
+          `${b.isActive === false ? 1 : 0}${b.city}${b.street}${b.customerNumber}`,
+        ),
       )
       .slice(0, limit);
   }
@@ -387,9 +707,11 @@ export async function listProperties(query = '', limit = 30): Promise<CustomerPr
             OR city LIKE ?
             OR owner LIKE ?
             OR tenant LIKE ?
-          ORDER BY city, street, customer_number
+            OR source_key LIKE ?
+          ORDER BY is_active DESC, city, street, customer_number
           LIMIT ?
         `,
+        search,
         search,
         search,
         search,
@@ -402,7 +724,7 @@ export async function listProperties(query = '', limit = 30): Promise<CustomerPr
     : await db.getAllAsync<PropertyRow>(
         `
           SELECT * FROM customer_properties
-          ORDER BY city, street, customer_number
+          ORDER BY is_active DESC, city, street, customer_number
           LIMIT ?
         `,
         limit,
@@ -428,6 +750,17 @@ async function findExistingPropertyId(
   db: SQLiteDatabase,
   property: Omit<CustomerProperty, 'id' | 'createdAt' | 'updatedAt'>,
 ): Promise<string | null> {
+  const sourceKey = compact(property.sourceKey ?? '');
+  if (sourceKey) {
+    const bySource = await db.getFirstAsync<{ id: string }>(
+      'SELECT id FROM customer_properties WHERE source_key = ? LIMIT 1',
+      sourceKey,
+    );
+    if (bySource?.id) {
+      return bySource.id;
+    }
+  }
+
   const customerNumber = compact(property.customerNumber);
   const street = compact(property.street);
   const postalCode = compact(property.postalCode);
@@ -469,6 +802,120 @@ async function findExistingPropertyId(
   return null;
 }
 
+async function upsertPropertyNative(
+  db: SQLiteDatabase,
+  property: Omit<CustomerProperty, 'id' | 'createdAt' | 'updatedAt'>,
+  timestamp: string,
+): Promise<{ id: string; inserted: boolean; skipped: boolean }> {
+  const normalized = normalizeManualProperty(property);
+  if (!compact(normalized.customerNumber) && !compact(normalized.street)) {
+    return { id: '', inserted: false, skipped: true };
+  }
+
+  const existingId = await findExistingPropertyId(db, normalized);
+  if (existingId) {
+    await db.runAsync(
+      `
+        UPDATE customer_properties SET
+          source_key = ?,
+          source_system = ?,
+          is_active = ?,
+          last_imported_at = ?,
+          customer_number = ?,
+          property_label = ?,
+          street = ?,
+          postal_code = ?,
+          city = ?,
+          building_type = ?,
+          other_building_type = ?,
+          owner = ?,
+          tenant = ?,
+          management = ?,
+          caretaker = ?,
+          billing_role = ?,
+          notification_role = ?,
+          fuel_types_json = ?,
+          fire_system_codes_json = ?,
+          oil_boiler = ?,
+          kwh = ?,
+          build_year = ?,
+          tour = ?,
+          cleaning_months_json = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+      compact(normalized.sourceKey ?? ''),
+      normalized.sourceSystem ?? 'manual',
+      normalized.isActive === false ? 0 : 1,
+      compact(normalized.lastImportedAt ?? ''),
+      compact(normalized.customerNumber),
+      compact(normalized.propertyLabel),
+      compact(normalized.street),
+      compact(normalized.postalCode),
+      compact(normalized.city),
+      normalized.buildingType,
+      compact(normalized.otherBuildingType),
+      compact(normalized.owner),
+      compact(normalized.tenant),
+      compact(normalized.management),
+      compact(normalized.caretaker),
+      normalized.billingRole,
+      normalized.notificationRole,
+      toJsonArray(normalized.fuelTypes),
+      toJsonArray(normalized.fireSystemCodes),
+      compact(normalized.oilBoiler),
+      compact(normalized.kwh),
+      compact(normalized.buildYear),
+      compact(normalized.tour),
+      toJsonArray(normalized.cleaningMonths),
+      timestamp,
+      existingId,
+    );
+    return { id: existingId, inserted: false, skipped: false };
+  }
+
+  const id = createId('prop');
+  await db.runAsync(
+    `
+      INSERT INTO customer_properties (
+        id, source_key, source_system, is_active, last_imported_at,
+        customer_number, property_label, street, postal_code, city,
+        building_type, other_building_type, owner, tenant, management, caretaker,
+        billing_role, notification_role, fuel_types_json, fire_system_codes_json,
+        oil_boiler, kwh, build_year, tour, cleaning_months_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    id,
+    compact(normalized.sourceKey ?? ''),
+    normalized.sourceSystem ?? 'manual',
+    normalized.isActive === false ? 0 : 1,
+    compact(normalized.lastImportedAt ?? ''),
+    compact(normalized.customerNumber),
+    compact(normalized.propertyLabel),
+    compact(normalized.street),
+    compact(normalized.postalCode),
+    compact(normalized.city),
+    normalized.buildingType,
+    compact(normalized.otherBuildingType),
+    compact(normalized.owner),
+    compact(normalized.tenant),
+    compact(normalized.management),
+    compact(normalized.caretaker),
+    normalized.billingRole,
+    normalized.notificationRole,
+    toJsonArray(normalized.fuelTypes),
+    toJsonArray(normalized.fireSystemCodes),
+    compact(normalized.oilBoiler),
+    compact(normalized.kwh),
+    compact(normalized.buildYear),
+    compact(normalized.tour),
+    toJsonArray(normalized.cleaningMonths),
+    timestamp,
+    timestamp,
+  );
+  return { id, inserted: true, skipped: false };
+}
+
 export async function upsertImportedProperties(
   properties: Array<Omit<CustomerProperty, 'id' | 'createdAt' | 'updatedAt'>>,
 ): Promise<ImportResult> {
@@ -478,29 +925,16 @@ export async function upsertImportedProperties(
     const timestamp = nowIso();
 
     for (const property of properties) {
-      if (!compact(property.customerNumber) && !compact(property.street)) {
+      const normalized = normalizeManualProperty({ ...property, sourceSystem: property.sourceSystem ?? 'manual' });
+      if (!compact(normalized.customerNumber) && !compact(normalized.street)) {
         result.skipped += 1;
         continue;
       }
 
-      const existingId = findExistingWebPropertyId(store, property);
+      const existingId = findExistingWebPropertyId(store, normalized);
       const nextProperty: CustomerProperty = {
-        ...property,
+        ...normalized,
         id: existingId ?? createId('prop'),
-        customerNumber: compact(property.customerNumber),
-        propertyLabel: compact(property.propertyLabel),
-        street: compact(property.street),
-        postalCode: compact(property.postalCode),
-        city: compact(property.city),
-        otherBuildingType: compact(property.otherBuildingType),
-        owner: compact(property.owner),
-        tenant: compact(property.tenant),
-        management: compact(property.management),
-        caretaker: compact(property.caretaker),
-        oilBoiler: compact(property.oilBoiler),
-        kwh: compact(property.kwh),
-        buildYear: compact(property.buildYear),
-        tour: compact(property.tour),
         createdAt: timestamp,
         updatedAt: timestamp,
       };
@@ -531,103 +965,360 @@ export async function upsertImportedProperties(
 
   await db.withTransactionAsync(async () => {
     for (const property of properties) {
-      if (!compact(property.customerNumber) && !compact(property.street)) {
+      const upsert = await upsertPropertyNative(db, { ...property, sourceSystem: property.sourceSystem ?? 'manual' }, timestamp);
+      if (upsert.skipped) {
         result.skipped += 1;
-        continue;
-      }
-
-      const existingId = await findExistingPropertyId(db, property);
-      if (existingId) {
-        await db.runAsync(
-          `
-            UPDATE customer_properties SET
-              customer_number = ?,
-              property_label = ?,
-              street = ?,
-              postal_code = ?,
-              city = ?,
-              building_type = ?,
-              other_building_type = ?,
-              owner = ?,
-              tenant = ?,
-              management = ?,
-              caretaker = ?,
-              billing_role = ?,
-              notification_role = ?,
-              fuel_types_json = ?,
-              fire_system_codes_json = ?,
-              oil_boiler = ?,
-              kwh = ?,
-              build_year = ?,
-              tour = ?,
-              cleaning_months_json = ?,
-              updated_at = ?
-            WHERE id = ?
-          `,
-          compact(property.customerNumber),
-          compact(property.propertyLabel),
-          compact(property.street),
-          compact(property.postalCode),
-          compact(property.city),
-          property.buildingType,
-          compact(property.otherBuildingType),
-          compact(property.owner),
-          compact(property.tenant),
-          compact(property.management),
-          compact(property.caretaker),
-          property.billingRole,
-          property.notificationRole,
-          toJsonArray(property.fuelTypes),
-          toJsonArray(property.fireSystemCodes),
-          compact(property.oilBoiler),
-          compact(property.kwh),
-          compact(property.buildYear),
-          compact(property.tour),
-          toJsonArray(property.cleaningMonths),
-          timestamp,
-          existingId,
-        );
-        result.updated += 1;
-      } else {
-        await db.runAsync(
-          `
-            INSERT INTO customer_properties (
-              id, customer_number, property_label, street, postal_code, city,
-              building_type, other_building_type, owner, tenant, management, caretaker,
-              billing_role, notification_role, fuel_types_json, fire_system_codes_json,
-              oil_boiler, kwh, build_year, tour, cleaning_months_json, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `,
-          createId('prop'),
-          compact(property.customerNumber),
-          compact(property.propertyLabel),
-          compact(property.street),
-          compact(property.postalCode),
-          compact(property.city),
-          property.buildingType,
-          compact(property.otherBuildingType),
-          compact(property.owner),
-          compact(property.tenant),
-          compact(property.management),
-          compact(property.caretaker),
-          property.billingRole,
-          property.notificationRole,
-          toJsonArray(property.fuelTypes),
-          toJsonArray(property.fireSystemCodes),
-          compact(property.oilBoiler),
-          compact(property.kwh),
-          compact(property.buildYear),
-          compact(property.tour),
-          toJsonArray(property.cleaningMonths),
-          timestamp,
-          timestamp,
-        );
+      } else if (upsert.inserted) {
         result.inserted += 1;
+      } else {
+        result.updated += 1;
       }
     }
   });
 
   return result;
+}
+
+export async function importGenesisBundle(
+  bundle: GenesisBundleV1,
+  fileName: string,
+): Promise<GenesisImportResult> {
+  if (isWeb) {
+    const store = readWebStore();
+    const timestamp = nowIso();
+    const result: GenesisImportResult = {
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      inactive: 0,
+      installations: 0,
+      plannedWork: 0,
+      history: 0,
+      warnings: [...bundle.metadata.warnings],
+    };
+    const sourceKeys = new Set(bundle.properties.map((property) => compact(property.sourceKey)).filter(Boolean));
+    const propertyIdsBySource = new Map<string, string>();
+
+    for (const property of bundle.properties) {
+      const normalized = normalizeGenesisProperty(property, timestamp);
+      if (!normalized.sourceKey || (!normalized.customerNumber && !normalized.street)) {
+        result.skipped += 1;
+        continue;
+      }
+
+      const existingId = findExistingWebPropertyId(store, normalized);
+      const nextProperty: CustomerProperty = {
+        ...normalized,
+        id: existingId ?? createId('prop'),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+
+      if (existingId) {
+        store.properties = store.properties.map((existing) =>
+          existing.id === existingId
+            ? { ...nextProperty, createdAt: existing.createdAt, updatedAt: timestamp }
+            : existing,
+        );
+        result.updated += 1;
+      } else {
+        store.properties.push(nextProperty);
+        result.inserted += 1;
+      }
+      propertyIdsBySource.set(normalized.sourceKey, nextProperty.id);
+    }
+
+    store.properties = store.properties.map((property) => {
+      if (property.sourceSystem === 'genesis' && property.sourceKey && !sourceKeys.has(property.sourceKey)) {
+        if (property.isActive !== false) {
+          result.inactive += 1;
+        }
+        return { ...property, isActive: false, updatedAt: timestamp };
+      }
+      return property;
+    });
+
+    const importedPropertyIds = new Set(propertyIdsBySource.values());
+    store.genesisInstallations = store.genesisInstallations.filter((item) => !importedPropertyIds.has(item.propertyId));
+    store.genesisPlannedWork = store.genesisPlannedWork.filter((item) => !importedPropertyIds.has(item.propertyId));
+    store.genesisHistory = store.genesisHistory.filter((item) => !importedPropertyIds.has(item.propertyId));
+
+    for (const item of bundle.installations) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey);
+      if (!propertyId) {
+        continue;
+      }
+      store.genesisInstallations.push({ ...item, id: createId('inst'), propertyId });
+      result.installations += 1;
+    }
+
+    for (const item of bundle.plannedWork) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey);
+      if (!propertyId) {
+        continue;
+      }
+      store.genesisPlannedWork.push({ ...item, id: createId('plan'), propertyId });
+      result.plannedWork += 1;
+    }
+
+    for (const item of bundle.history) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey);
+      if (!propertyId) {
+        continue;
+      }
+      store.genesisHistory.push({ ...item, id: createId('hist'), propertyId });
+      result.history += 1;
+    }
+
+    store.genesisImportRuns.unshift({
+      id: createId('gimp'),
+      fileName,
+      importedAt: timestamp,
+      exportedAt: bundle.metadata.exportedAt,
+      schemaVersion: bundle.schemaVersion,
+      converterVersion: bundle.metadata.converterVersion,
+      propertiesCount: bundle.properties.length,
+      installationsCount: result.installations,
+      plannedWorkCount: result.plannedWork,
+      historyCount: result.history,
+      inactiveCount: result.inactive,
+      warnings: result.warnings,
+      tableCounts: bundle.metadata.tableCounts,
+    });
+
+    writeWebStore(store);
+    return result;
+  }
+
+  const db = await initDatabase();
+  if (!db) {
+    throw new Error('Datenbank nicht verfuegbar.');
+  }
+
+  const timestamp = nowIso();
+  const result: GenesisImportResult = {
+    inserted: 0,
+    updated: 0,
+    skipped: 0,
+    inactive: 0,
+    installations: 0,
+    plannedWork: 0,
+    history: 0,
+    warnings: [...bundle.metadata.warnings],
+  };
+  const sourceKeys = new Set(bundle.properties.map((property) => compact(property.sourceKey)).filter(Boolean));
+  const propertyIdsBySource = new Map<string, string>();
+
+  await db.withTransactionAsync(async () => {
+    for (const property of bundle.properties) {
+      const normalized = normalizeGenesisProperty(property, timestamp);
+      if (!normalized.sourceKey || (!normalized.customerNumber && !normalized.street)) {
+        result.skipped += 1;
+        continue;
+      }
+
+      const upsert = await upsertPropertyNative(db, normalized, timestamp);
+      if (upsert.skipped) {
+        result.skipped += 1;
+        continue;
+      }
+      if (upsert.inserted) {
+        result.inserted += 1;
+      } else {
+        result.updated += 1;
+      }
+      propertyIdsBySource.set(normalized.sourceKey, upsert.id);
+      await db.runAsync('DELETE FROM genesis_installations WHERE property_id = ?', upsert.id);
+      await db.runAsync('DELETE FROM genesis_planned_work WHERE property_id = ?', upsert.id);
+      await db.runAsync('DELETE FROM genesis_history WHERE property_id = ?', upsert.id);
+    }
+
+    const activeGenesis = await db.getAllAsync<{ id: string; source_key: string }>(
+      "SELECT id, source_key FROM customer_properties WHERE source_system = 'genesis' AND is_active = 1",
+    );
+    for (const property of activeGenesis) {
+      if (property.source_key && !sourceKeys.has(property.source_key)) {
+        await db.runAsync(
+          'UPDATE customer_properties SET is_active = 0, updated_at = ? WHERE id = ?',
+          timestamp,
+          property.id,
+        );
+        result.inactive += 1;
+      }
+    }
+
+    for (const item of bundle.installations) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey);
+      if (!propertyId) {
+        continue;
+      }
+      await db.runAsync(
+        `
+          INSERT INTO genesis_installations (
+            id, property_id, source_key, installation_key, system_code, label, fuel_types_json,
+            manufacturer, model, build_year, kwh, location, notes, raw_json, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        createId('inst'),
+        propertyId,
+        compact(item.sourceKey),
+        compact(item.installationKey),
+        compact(item.systemCode),
+        compact(item.label),
+        toJsonArray(item.fuelTypes),
+        compact(item.manufacturer),
+        compact(item.model),
+        compact(item.buildYear),
+        compact(item.kwh),
+        compact(item.location),
+        compact(item.notes),
+        JSON.stringify(item.raw ?? {}),
+        timestamp,
+      );
+      result.installations += 1;
+    }
+
+    for (const item of bundle.plannedWork) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey);
+      if (!propertyId) {
+        continue;
+      }
+      await db.runAsync(
+        `
+          INSERT INTO genesis_planned_work (
+            id, property_id, source_key, work_key, month, tour, quantity, description, tp,
+            amount, minutes, notes, raw_json, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        createId('plan'),
+        propertyId,
+        compact(item.sourceKey),
+        compact(item.workKey),
+        compact(item.month),
+        compact(item.tour),
+        compact(item.quantity),
+        compact(item.description),
+        compact(item.tp),
+        compact(item.amount),
+        compact(item.minutes),
+        compact(item.notes),
+        JSON.stringify(item.raw ?? {}),
+        timestamp,
+      );
+      result.plannedWork += 1;
+    }
+
+    for (const item of bundle.history) {
+      const propertyId = propertyIdsBySource.get(item.sourceKey);
+      if (!propertyId) {
+        continue;
+      }
+      await db.runAsync(
+        `
+          INSERT INTO genesis_history (
+            id, property_id, source_key, history_key, date, employee, description,
+            amount, minutes, notes, raw_json, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        createId('hist'),
+        propertyId,
+        compact(item.sourceKey),
+        compact(item.historyKey),
+        compact(item.date),
+        compact(item.employee),
+        compact(item.description),
+        compact(item.amount),
+        compact(item.minutes),
+        compact(item.notes),
+        JSON.stringify(item.raw ?? {}),
+        timestamp,
+      );
+      result.history += 1;
+    }
+
+    await db.runAsync(
+      `
+        INSERT INTO genesis_import_runs (
+          id, file_name, imported_at, exported_at, schema_version, converter_version,
+          properties_count, installations_count, planned_work_count, history_count,
+          inactive_count, warnings_json, table_counts_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      createId('gimp'),
+      fileName,
+      timestamp,
+      bundle.metadata.exportedAt,
+      bundle.schemaVersion,
+      bundle.metadata.converterVersion,
+      bundle.properties.length,
+      result.installations,
+      result.plannedWork,
+      result.history,
+      result.inactive,
+      JSON.stringify(result.warnings),
+      JSON.stringify(bundle.metadata.tableCounts),
+    );
+  });
+
+  return result;
+}
+
+export async function listGenesisImportRuns(limit = 5): Promise<GenesisImportRun[]> {
+  if (isWeb) {
+    return readWebStore().genesisImportRuns.slice(0, limit);
+  }
+
+  const db = await initDatabase();
+  if (!db) {
+    throw new Error('Datenbank nicht verfuegbar.');
+  }
+  const rows = await db.getAllAsync<GenesisImportRunRow>(
+    'SELECT * FROM genesis_import_runs ORDER BY imported_at DESC LIMIT ?',
+    limit,
+  );
+  return rows.map(mapGenesisImportRun);
+}
+
+export async function getGenesisContext(propertyId: string): Promise<GenesisPropertyContext> {
+  if (isWeb) {
+    const store = readWebStore();
+    return {
+      importRun: store.genesisImportRuns[0] ?? null,
+      installations: store.genesisInstallations.filter((item) => item.propertyId === propertyId),
+      plannedWork: store.genesisPlannedWork.filter((item) => item.propertyId === propertyId),
+      history: store.genesisHistory
+        .filter((item) => item.propertyId === propertyId)
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 30),
+    };
+  }
+
+  const db = await initDatabase();
+  if (!db) {
+    throw new Error('Datenbank nicht verfuegbar.');
+  }
+  const [runRow, installationRows, plannedRows, historyRows] = await Promise.all([
+    db.getFirstAsync<GenesisImportRunRow>('SELECT * FROM genesis_import_runs ORDER BY imported_at DESC LIMIT 1'),
+    db.getAllAsync<GenesisInstallationRow>(
+      'SELECT * FROM genesis_installations WHERE property_id = ? ORDER BY installation_key, label',
+      propertyId,
+    ),
+    db.getAllAsync<GenesisPlannedWorkRow>(
+      'SELECT * FROM genesis_planned_work WHERE property_id = ? ORDER BY month, work_key',
+      propertyId,
+    ),
+    db.getAllAsync<GenesisHistoryRow>(
+      'SELECT * FROM genesis_history WHERE property_id = ? ORDER BY date DESC LIMIT 30',
+      propertyId,
+    ),
+  ]);
+
+  return {
+    importRun: runRow ? mapGenesisImportRun(runRow) : null,
+    installations: installationRows.map(mapGenesisInstallation),
+    plannedWork: plannedRows.map(mapGenesisPlannedWork),
+    history: historyRows.map(mapGenesisHistory),
+  };
 }
 
 export async function createReport(propertyId: string): Promise<ServiceReport> {

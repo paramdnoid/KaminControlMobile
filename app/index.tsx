@@ -70,6 +70,7 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.statsGrid}>
+        <Stat label="Genesis-Importe" value={stats?.genesisImports ?? 0} />
         <Stat label="Entwürfe" value={stats?.drafts ?? 0} />
         <Stat label="Abgeschlossen" value={stats?.completed ?? 0} />
         <Stat label="Exportiert" value={stats?.exported ?? 0} />
@@ -110,7 +111,7 @@ export default function HomeScreen() {
         <Card>
           <Text style={styles.emptyTitle}>Keine Liegenschaften gefunden</Text>
           <Text style={styles.emptyText}>
-            Importiere eine CSV- oder XLSX-Datei mit Kundennummer und Liegenschaftsadresse.
+            Importiere eine CSV/XLSX-Datei oder ein Genesis-Bundle mit Kundennummer und Liegenschaftsadresse.
           </Text>
           <Button
             label="Import öffnen"
@@ -141,6 +142,7 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.md,
   },
   statValue: {

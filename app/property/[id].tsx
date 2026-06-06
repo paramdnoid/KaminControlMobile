@@ -10,6 +10,7 @@ import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import {
   createReport,
+  getGenesisContext,
   getProperty,
   listReports,
 } from '../../src/data/database';
@@ -19,12 +20,13 @@ import {
   displayFuelTypes,
 } from '../../src/data/options';
 import { colors, spacing, typography } from '../../src/theme/theme';
-import type { CustomerProperty, ReportBundle } from '../../src/types';
+import type { CustomerProperty, GenesisPropertyContext, ReportBundle } from '../../src/types';
 import { joinAddress } from '../../src/utils/text';
 
 export default function PropertyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [property, setProperty] = useState<CustomerProperty | null>(null);
+  const [genesisContext, setGenesisContext] = useState<GenesisPropertyContext | null>(null);
   const [reports, setReports] = useState<ReportBundle[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -35,8 +37,13 @@ export default function PropertyDetailScreen() {
     }
 
     setLoading(true);
-    const [nextProperty, allReports] = await Promise.all([getProperty(id), listReports()]);
+    const [nextProperty, allReports, nextGenesisContext] = await Promise.all([
+      getProperty(id),
+      listReports(),
+      getGenesisContext(id),
+    ]);
     setProperty(nextProperty);
+    setGenesisContext(nextGenesisContext);
     setReports(allReports.filter((bundle) => bundle.property.id === id));
     setLoading(false);
   }, [id]);
@@ -96,6 +103,8 @@ export default function PropertyDetailScreen() {
     >
       <SectionHeader title="Stammdaten" meta={property.customerNumber ? `Kundennummer ${property.customerNumber}` : undefined} />
       <Card>
+        <Info label="Quelle" value={property.sourceSystem === 'genesis' ? `Genesis ${property.sourceKey || ''}` : 'Manuell'} />
+        <Info label="Status" value={property.isActive === false ? 'Inaktiv im letzten Genesis-Import' : 'Aktiv'} />
         <Info label="Gebäudeart" value={displayBuildingType(property.buildingType, property.otherBuildingType)} />
         <Info label="Rechnungsadresse" value={displayAddressRole(property.billingRole)} />
         <Info label="Avisierungsadresse" value={displayAddressRole(property.notificationRole)} />
@@ -119,6 +128,77 @@ export default function PropertyDetailScreen() {
         <Info label="Tour" value={property.tour} />
         <Info label="Reinigungsmonate" value={property.cleaningMonths.join(', ') || '-'} />
       </Card>
+
+      {genesisContext ? (
+        <>
+          <SectionHeader
+            title="Genesis-Kontext"
+            meta={genesisContext.importRun ? `Import ${new Date(genesisContext.importRun.importedAt).toLocaleDateString('de-CH')}` : undefined}
+          />
+          <Card>
+            <Info label="Anlagen" value={`${genesisContext.installations.length}`} />
+            <Info label="Geplante Arbeiten" value={`${genesisContext.plannedWork.length}`} />
+            <Info label="Historie" value={`${genesisContext.history.length}`} />
+          </Card>
+
+          {genesisContext.installations.length ? (
+            <>
+              <SectionHeader title="Anlagen" />
+              <View style={styles.list}>
+                {genesisContext.installations.map((installation) => (
+                  <Card key={installation.id} compact>
+                    <Text style={styles.itemTitle}>{installation.label || installation.systemCode || 'Anlage'}</Text>
+                    <Text style={styles.meta}>
+                      {[installation.fuelTypes.join(', '), installation.kwh && `${installation.kwh} kW`, installation.buildYear && `Baujahr ${installation.buildYear}`]
+                        .filter(Boolean)
+                        .join(' · ') || '-'}
+                    </Text>
+                    <Text style={styles.text}>
+                      {[installation.manufacturer, installation.model, installation.location].filter(Boolean).join(', ') || installation.notes || '-'}
+                    </Text>
+                  </Card>
+                ))}
+              </View>
+            </>
+          ) : null}
+
+          {genesisContext.plannedWork.length ? (
+            <>
+              <SectionHeader title="Geplante Arbeiten" />
+              <View style={styles.list}>
+                {genesisContext.plannedWork.map((work) => (
+                  <Card key={work.id} compact>
+                    <Text style={styles.itemTitle}>{work.description || work.tp || 'Geplante Arbeit'}</Text>
+                    <Text style={styles.meta}>
+                      {[work.quantity && `Anzahl ${work.quantity}`, work.minutes && `${work.minutes} Min.`, work.month, work.tour && `Tour ${work.tour}`]
+                        .filter(Boolean)
+                        .join(' · ') || '-'}
+                    </Text>
+                    {work.notes ? <Text style={styles.text}>{work.notes}</Text> : null}
+                  </Card>
+                ))}
+              </View>
+            </>
+          ) : null}
+
+          {genesisContext.history.length ? (
+            <>
+              <SectionHeader title="Historie" meta="Read-only aus Genesis" />
+              <View style={styles.list}>
+                {genesisContext.history.slice(0, 8).map((entry) => (
+                  <Card key={entry.id} compact>
+                    <Text style={styles.itemTitle}>{entry.date || 'Ohne Datum'}</Text>
+                    <Text style={styles.meta}>
+                      {[entry.employee, entry.amount && `CHF ${entry.amount}`].filter(Boolean).join(' · ') || '-'}
+                    </Text>
+                    <Text style={styles.text}>{entry.description || entry.notes || '-'}</Text>
+                  </Card>
+                ))}
+              </View>
+            </>
+          ) : null}
+        </>
+      ) : null}
 
       <SectionHeader title="Rapporte" meta={`${reports.length} lokal gespeichert`} />
       {reports.length ? (
@@ -158,9 +238,20 @@ const styles = StyleSheet.create({
   text: {
     color: colors.muted,
     fontSize: typography.body,
+    lineHeight: 23,
   },
   list: {
     gap: spacing.md,
+  },
+  itemTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: '800',
+  },
+  meta: {
+    color: colors.muted,
+    fontSize: typography.small,
+    lineHeight: 19,
   },
   info: {
     gap: spacing.xs,

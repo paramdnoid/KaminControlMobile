@@ -2,23 +2,28 @@ import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
-import { CheckCircle2, FileSpreadsheet, UploadCloud } from 'lucide-react-native';
+import { CheckCircle2, Database, FileJson2, FileSpreadsheet, UploadCloud } from 'lucide-react-native';
 
 import { Button } from '../src/components/Button';
 import { Card } from '../src/components/Card';
 import { Screen } from '../src/components/Screen';
 import { SectionHeader } from '../src/components/SectionHeader';
-import { upsertImportedProperties } from '../src/data/database';
+import { importGenesisBundle, upsertImportedProperties } from '../src/data/database';
+import { parseGenesisBundleAsset } from '../src/import/genesisBundle';
 import { IMPORT_TEMPLATE_HEADERS, parseImportAsset } from '../src/import/importer';
 import { colors, spacing, typography } from '../src/theme/theme';
-import type { ImportPreview, ImportResult } from '../src/types';
+import type { GenesisBundlePreview, GenesisImportResult, ImportPreview, ImportResult } from '../src/types';
 import { joinAddress } from '../src/utils/text';
 
 export default function ImportScreen() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [genesisPreview, setGenesisPreview] = useState<GenesisBundlePreview | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [genesisResult, setGenesisResult] = useState<GenesisImportResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [genesisLoading, setGenesisLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [genesisSaving, setGenesisSaving] = useState(false);
 
   async function pickFile() {
     setLoading(true);
@@ -38,11 +43,33 @@ export default function ImportScreen() {
 
       if (!picked.canceled && picked.assets[0]) {
         setPreview(await parseImportAsset(picked.assets[0]));
+        setGenesisPreview(null);
       }
     } catch (error) {
       Alert.alert('Importfehler', error instanceof Error ? error.message : 'Datei konnte nicht gelesen werden.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function pickGenesisBundle() {
+    setGenesisLoading(true);
+    setGenesisResult(null);
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        multiple: false,
+        type: ['application/json', 'text/json', 'text/plain'],
+      });
+
+      if (!picked.canceled && picked.assets[0]) {
+        setGenesisPreview(await parseGenesisBundleAsset(picked.assets[0]));
+        setPreview(null);
+      }
+    } catch (error) {
+      Alert.alert('Genesis-Importfehler', error instanceof Error ? error.message : 'Genesis-Bundle konnte nicht gelesen werden.');
+    } finally {
+      setGenesisLoading(false);
     }
   }
 
@@ -64,19 +91,50 @@ export default function ImportScreen() {
     }
   }
 
+  async function saveGenesisImport() {
+    if (!genesisPreview) {
+      return;
+    }
+
+    setGenesisSaving(true);
+    try {
+      const nextResult = await importGenesisBundle(genesisPreview.bundle, genesisPreview.fileName);
+      setGenesisResult(nextResult);
+    } catch (error) {
+      Alert.alert('Genesis-Speichern fehlgeschlagen', error instanceof Error ? error.message : 'Genesis-Bundle konnte nicht gespeichert werden.');
+    } finally {
+      setGenesisSaving(false);
+    }
+  }
+
   return (
     <Screen
       title="Stammdatenimport"
-      subtitle="CSV oder XLSX aus einer kontrollierten Kunden-/Liegenschaftsliste."
+      subtitle="CSV/XLSX oder ein vorbereitetes Genesis-Bundle lokal importieren."
     >
       <Card>
-        <Text style={styles.label}>Erwartete Spalten</Text>
+        <Text style={styles.label}>CSV/XLSX</Text>
+        <Text style={styles.text}>Import aus einer kontrollierten Kunden-/Liegenschaftsliste.</Text>
         <Text style={styles.text}>{IMPORT_TEMPLATE_HEADERS.join(', ')}</Text>
         <Button
-          label={preview ? 'Andere Datei wählen' : 'Datei wählen'}
+          label={preview ? 'Andere CSV/XLSX wählen' : 'CSV/XLSX wählen'}
           icon={UploadCloud}
           loading={loading}
           onPress={pickFile}
+          variant="secondary"
+        />
+      </Card>
+
+      <Card>
+        <Text style={styles.label}>Genesis-Bundle</Text>
+        <Text style={styles.text}>
+          Importiert `genesis-export-v1.json` aus der Desktop-Converter-App. MDB-Dateien bleiben ausserhalb der Mobile-App.
+        </Text>
+        <Button
+          label={genesisPreview ? 'Anderes Genesis-Bundle wählen' : 'Genesis-Bundle wählen'}
+          icon={Database}
+          loading={genesisLoading}
+          onPress={pickGenesisBundle}
           variant="primary"
         />
       </Card>
@@ -123,6 +181,41 @@ export default function ImportScreen() {
         </>
       ) : null}
 
+      {genesisPreview ? (
+        <>
+          <SectionHeader
+            title="Genesis-Vorschau"
+            meta={`${genesisPreview.bundle.properties.length} Liegenschaften im Bundle`}
+          />
+          <Card>
+            <View style={styles.resultGrid}>
+              <Metric label="Datei" value={genesisPreview.fileName} />
+              <Metric label="Anlagen" value={`${genesisPreview.bundle.installations.length}`} />
+              <Metric label="Geplante Arbeit" value={`${genesisPreview.bundle.plannedWork.length}`} />
+              <Metric label="Historie" value={`${genesisPreview.bundle.history.length}`} />
+            </View>
+            <View style={styles.tableCounts}>
+              {Object.entries(genesisPreview.bundle.metadata.tableCounts).slice(0, 8).map(([table, count]) => (
+                <Text key={table} style={styles.countLine}>{table}: {count}</Text>
+              ))}
+            </View>
+            {genesisPreview.warnings.slice(0, 5).map((warning) => (
+              <Text key={warning} style={styles.warning}>{warning}</Text>
+            ))}
+            {genesisPreview.warnings.length > 5 ? (
+              <Text style={styles.text}>Weitere {genesisPreview.warnings.length - 5} Warnungen werden im Importlauf gespeichert.</Text>
+            ) : null}
+            <Button
+              label="Genesis-Bundle importieren"
+              icon={FileJson2}
+              loading={genesisSaving}
+              onPress={saveGenesisImport}
+              variant="primary"
+            />
+          </Card>
+        </>
+      ) : null}
+
       {result ? (
         <Card>
           <View style={styles.doneHeader}>
@@ -133,6 +226,24 @@ export default function ImportScreen() {
             <Metric label="Neu" value={`${result.inserted}`} />
             <Metric label="Aktualisiert" value={`${result.updated}`} />
             <Metric label="Übersprungen" value={`${result.skipped}`} />
+          </View>
+          <Button label="Zur Suche" onPress={() => router.replace('/')} variant="secondary" />
+        </Card>
+      ) : null}
+
+      {genesisResult ? (
+        <Card>
+          <View style={styles.doneHeader}>
+            <CheckCircle2 color={colors.success} size={24} />
+            <Text style={styles.doneTitle}>Genesis-Import gespeichert</Text>
+          </View>
+          <View style={styles.resultGrid}>
+            <Metric label="Neu" value={`${genesisResult.inserted}`} />
+            <Metric label="Aktualisiert" value={`${genesisResult.updated}`} />
+            <Metric label="Inaktiv" value={`${genesisResult.inactive}`} />
+            <Metric label="Anlagen" value={`${genesisResult.installations}`} />
+            <Metric label="Geplante Arbeit" value={`${genesisResult.plannedWork}`} />
+            <Metric label="Historie" value={`${genesisResult.history}`} />
           </View>
           <Button label="Zur Suche" onPress={() => router.replace('/')} variant="secondary" />
         </Card>
@@ -200,6 +311,17 @@ const styles = StyleSheet.create({
   },
   warning: {
     color: colors.warning,
+    fontSize: typography.small,
+    fontWeight: '700',
+  },
+  tableCounts: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 8,
+    gap: spacing.xs,
+    padding: spacing.md,
+  },
+  countLine: {
+    color: colors.text,
     fontSize: typography.small,
     fontWeight: '700',
   },

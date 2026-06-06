@@ -10,6 +10,7 @@ import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import {
   completeReport,
+  getGenesisContext,
   getReportBundle,
   markReportExported,
   saveReport,
@@ -19,7 +20,7 @@ import {
   shareReportPdf,
 } from '../../src/pdf/reportPdf';
 import { colors, spacing, typography } from '../../src/theme/theme';
-import type { ReportBundle, ServiceReport, WorkItem } from '../../src/types';
+import type { GenesisPropertyContext, ReportBundle, ServiceReport, WorkItem } from '../../src/types';
 import { createId } from '../../src/utils/id';
 import { joinAddress } from '../../src/utils/text';
 
@@ -44,6 +45,7 @@ function emptyWorkItem(reportId: string, sortOrder: number): WorkItem {
 export default function ReportScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [bundle, setBundle] = useState<ReportBundle | null>(null);
+  const [genesisContext, setGenesisContext] = useState<GenesisPropertyContext | null>(null);
   const [report, setReport] = useState<ServiceReport | null>(null);
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +62,9 @@ export default function ReportScreen() {
 
     setLoading(true);
     const nextBundle = await getReportBundle(id);
+    const nextGenesisContext = nextBundle ? await getGenesisContext(nextBundle.property.id) : null;
     setBundle(nextBundle);
+    setGenesisContext(nextGenesisContext);
     setReport(nextBundle?.report ?? null);
     setWorkItems(
       nextBundle?.workItems.length
@@ -121,6 +125,29 @@ export default function ReportScreen() {
       return;
     }
     setWorkItems((current) => [...current, emptyWorkItem(report.id, current.length)]);
+  }
+
+  function applyPlannedWork() {
+    if (!report || !genesisContext?.plannedWork.length) {
+      return;
+    }
+
+    const mapped = genesisContext.plannedWork.map((work, index) => ({
+      id: createId('item'),
+      reportId: report.id,
+      quantity: work.quantity,
+      description: work.description || work.notes || 'Geplante Genesis-Arbeit',
+      tp: work.tp,
+      amount: work.amount,
+      minutes: work.minutes,
+      sortOrder: index,
+    }));
+
+    setWorkItems((current) => {
+      const currentHasContent = cleanWorkItems(current).length > 0;
+      const nextItems = currentHasContent ? [...current, ...mapped] : mapped;
+      return nextItems.map((item, index) => ({ ...item, sortOrder: index }));
+    });
   }
 
   function validate(): boolean {
@@ -259,6 +286,14 @@ export default function ReportScreen() {
       </Card>
 
       <SectionHeader title="Arbeiten vor Ort" meta={`${cleanWorkItems(workItems).length} Positionen mit Inhalt`} />
+      {!isCompleted && genesisContext?.plannedWork.length ? (
+        <Card compact>
+          <Text style={styles.meta}>
+            {genesisContext.plannedWork.length} geplante Genesis-Positionen fuer diese Liegenschaft verfuegbar.
+          </Text>
+          <Button label="Geplante Arbeiten übernehmen" icon={Plus} onPress={applyPlannedWork} variant="secondary" />
+        </Card>
+      ) : null}
       <View style={styles.list}>
         {workItems.map((item, index) => (
           <Card key={item.id}>

@@ -14,7 +14,9 @@
     "expo-sharing": "~56.0.16",
     "expo-sqlite": "~56.0.4",
     "expo-status-bar": "~56.0.4",
+    "jszip": "^3.10.1",
     "lucide-react-native": "^1.17.0",
+    "mdb-reader": "^3.2.0",
     "papaparse": "^5.5.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -26,16 +28,27 @@
     "read-excel-file": "^9.0.10"
   },
   "devDependencies": {
+    "@types/node": "^25.9.2",
     "@types/papaparse": "^5.5.2",
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "electron": "^42.3.3",
+    "tsx": "^4.22.4",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && npm run converter:typecheck",
+    "converter:typecheck": "tsc -p desktop-converter/tsconfig.json --noEmit",
+    "converter:build": "vite build --config desktop-converter/vite.config.ts",
+    "converter:start": "npm run converter:build && NODE_OPTIONS=\"--require tsx/cjs\" electron desktop-converter/electron/main.ts",
+    "converter:convert": "tsx desktop-converter/scripts/convert.ts",
+    "converter:test": "tsx desktop-converter/tests/genesisConverter.test.ts"
   },
   "private": true
 }
