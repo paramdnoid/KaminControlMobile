@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildSourceKey,
   clean,
+  countUnmatchedAssignablePdfDocuments,
   findGenesisDatabaseEntryPath,
   mapArbvolFallbackProperty,
   mapFkProperty,
@@ -11,10 +12,14 @@ import {
   mapInvoiceFallbackProperty,
   mapInvoiceLine,
   mapInstallation,
+  mapKfkInvoice,
+  mapKfkInvoiceLine,
   mapKfdProperty,
   mapPdfDocument,
   mapPlannedWork,
   mapTariffSuggestion,
+  sourceKeyFromKfkCustomerNumber,
+  toMobileGenesisBundle,
 } from '../src/genesisConverter.ts';
 
 const emptyHelpers = {
@@ -30,6 +35,8 @@ const emptyHelpers = {
 
 assert.equal(clean('  Test \0  Wert   '), 'Test Wert');
 assert.equal(buildSourceKey(11, 3, '0196   ', 0), '11-3-0196-0');
+assert.equal(sourceKeyFromKfkCustomerNumber('2200010045   0000'), '220-1-0045-0');
+assert.equal(sourceKeyFromKfkCustomerNumber('0030010004   0100'), '3-1-0004-100');
 assert.equal(
   findGenesisDatabaseEntryPath(['Genesis.ini', 'Daten\\KFDSTAMM.MDB', 'Backup/KFDSTAMM.MDB'], 'KFDSTAMM.MDB'),
   'Daten\\KFDSTAMM.MDB',
@@ -224,6 +231,33 @@ assert.equal(invoice.sourceKey, '11-3-0196-0');
 assert.equal(invoice.status, 'paid');
 assert.equal(invoice.totalAmount, '222.45');
 
+const kfkInvoice = mapKfkInvoice({
+  OPRechNr: 20220062,
+  KuNrOP: '2200010045   0000',
+  RAdr1: '',
+  RAdr2: 'STWEG',
+  RAdr3: 'Casa Stradin',
+  RAdr4: '',
+  RAdr5: '',
+  RAdr6: 'Strada 45',
+  RAdr7: '',
+  RAdr8: '7130 Ilanz',
+  RLieg1: '7130 Ilanz',
+  RLieg2: 'Strada 45',
+  RLieg3: 'STWEG Casa Stradin',
+  RLieg4: '',
+  RNetto: '143.3',
+  RMWST1: '11.05',
+  RTotal: '154.35',
+});
+assert.ok(kfkInvoice);
+assert.equal(kfkInvoice.sourceKey, '220-1-0045-0');
+assert.equal(kfkInvoice.invoiceNumber, '20220062');
+assert.equal(kfkInvoice.status, 'unknown');
+assert.equal(kfkInvoice.totalAmount, '154.35');
+assert.equal(kfkInvoice.invoiceAddress, 'STWEG\nCasa Stradin\nStrada 45\n7130 Ilanz');
+assert.equal(kfkInvoice.propertyAddress, '7130 Ilanz\nStrada 45\nSTWEG Casa Stradin');
+
 const invoiceFallbackProperty = mapInvoiceFallbackProperty({
   ...invoice,
   sourceKey: '1-99-0001-0',
@@ -235,6 +269,12 @@ assert.equal(invoiceFallbackProperty.sourceKey, '1-99-0001-0');
 assert.equal(invoiceFallbackProperty.propertyLabel, 'Haus Muster');
 assert.equal(invoiceFallbackProperty.postalCode, '7013');
 assert.equal(invoiceFallbackProperty.rawRefs?.fallback, 'OPSTAMM.OP');
+
+const kfkInvoiceFallbackProperty = mapInvoiceFallbackProperty({
+  ...kfkInvoice,
+  sourceKey: '220-1-0045-0',
+});
+assert.equal(kfkInvoiceFallbackProperty.rawRefs?.fallback, 'KFKRECH.RechDivers');
 
 const invoiceLine = mapInvoiceLine({
   RechNr: 20250113,
@@ -248,6 +288,19 @@ const invoiceLine = mapInvoiceLine({
 assert.equal(invoiceLine.lineType, 'charge');
 assert.equal(invoiceLine.amount, '175');
 assert.equal(invoiceLine.unitPrice, '1.4');
+
+const kfkInvoiceLine = mapKfkInvoiceLine({
+  OPRechNr: 20220062,
+  PossNr: 3,
+  PossAnz: '1     ',
+  PossBez: 'Alkalische Heizflächenreinigung',
+  PossPreis: '',
+  PossGes: '33.2',
+  PossMWST: '7.7',
+}, kfkInvoice);
+assert.equal(kfkInvoiceLine.amount, '33.2');
+assert.equal(kfkInvoiceLine.unitPrice, '33.2');
+assert.equal(kfkInvoiceLine.notes, 'MWST 7.7');
 
 const invoicePdf = mapPdfDocument(
   'Kopien\\20250113-Rechnung.PDF',
@@ -278,6 +331,60 @@ assert.ok(rapportPdfWithHyphenatedHouse);
 assert.equal(rapportPdfWithHyphenatedHouse.kind, 'rapport');
 assert.equal(rapportPdfWithHyphenatedHouse.sourceKey, '15-7-0027c-a-0');
 assert.equal(rapportPdfWithHyphenatedHouse.matched, true);
+
+const exportPdf = mapPdfDocument(
+  'Export\\Arbeitsliste_1.PDF',
+  new Set(),
+  new Set(),
+);
+assert.ok(exportPdf);
+assert.equal(exportPdf.kind, 'export');
+assert.equal(exportPdf.matched, false);
+assert.equal(countUnmatchedAssignablePdfDocuments([exportPdf]), 0);
+
+const unmatchedInvoicePdf = mapPdfDocument(
+  'Kopien\\20220062-Rechnung.PDF',
+  new Set(),
+  new Set(),
+);
+assert.ok(unmatchedInvoicePdf);
+assert.equal(countUnmatchedAssignablePdfDocuments([exportPdf, unmatchedInvoicePdf]), 1);
+
+const mobileBundle = toMobileGenesisBundle({
+  schemaVersion: 'genesis-bundle.v2',
+  metadata: {
+    exportedAt: '2026-06-06T00:00:00.000Z',
+    converterVersion: 'test',
+    sourceFileName: 'test.zip',
+    tableCounts: {},
+    warnings: [],
+  },
+  properties: [property],
+  installations: [installation],
+  plannedWork: [planned],
+  invoices: [invoice],
+  invoiceLines: [invoiceLine],
+  pdfDocuments: [invoicePdf],
+  history: [mapHistory({
+    ARKuG: 11,
+    ARKuS: 3,
+    ARKuH: '0196',
+    ARKuZ: 0,
+    ARDatum: '2025.04.01',
+    ARMit: 'AB',
+    ARReNr: 20250113,
+    ARPreis: '10.0000',
+    ARVF: '1 1',
+    ARFSchau: 0,
+  }, 0)],
+});
+assert.equal('rawRefs' in mobileBundle.properties[0], false);
+assert.equal('raw' in mobileBundle.installations[0], false);
+assert.equal('raw' in mobileBundle.plannedWork[0], false);
+assert.equal('raw' in mobileBundle.invoices![0], false);
+assert.equal('raw' in mobileBundle.invoiceLines![0], false);
+assert.equal('raw' in mobileBundle.pdfDocuments![0], false);
+assert.equal('raw' in mobileBundle.history[0], false);
 
 const history = mapHistory({
   ARKuG: 11,

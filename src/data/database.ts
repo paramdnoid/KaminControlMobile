@@ -218,13 +218,16 @@ type WebStore = {
 };
 
 const WEB_STORE_KEY = 'kamincontrolmobile.v1.store';
+const WEB_DB_NAME = 'kamincontrolmobile';
+const WEB_DB_VERSION = 1;
+const WEB_DB_STORE = 'stores';
 const isWeb = Platform.OS === 'web';
 
 let dbPromise: Promise<SQLiteDatabase | null> | null = null;
 
 export async function initDatabase(): Promise<SQLiteDatabase | null> {
   if (isWeb) {
-    writeWebStore(readWebStore());
+    await writeWebStore(await readWebStore());
     return null;
   }
 
@@ -500,7 +503,22 @@ function emptyWebStore(): WebStore {
   };
 }
 
-function readWebStore(): WebStore {
+function normalizeWebStore(parsed: Partial<WebStore> | null | undefined): WebStore {
+  return {
+    properties: Array.isArray(parsed?.properties) ? parsed.properties : [],
+    reports: Array.isArray(parsed?.reports) ? parsed.reports : [],
+    workItems: Array.isArray(parsed?.workItems) ? parsed.workItems : [],
+    genesisImportRuns: Array.isArray(parsed?.genesisImportRuns) ? parsed.genesisImportRuns : [],
+    genesisInstallations: Array.isArray(parsed?.genesisInstallations) ? parsed.genesisInstallations : [],
+    genesisPlannedWork: Array.isArray(parsed?.genesisPlannedWork) ? parsed.genesisPlannedWork : [],
+    genesisInvoices: Array.isArray(parsed?.genesisInvoices) ? parsed.genesisInvoices : [],
+    genesisInvoiceLines: Array.isArray(parsed?.genesisInvoiceLines) ? parsed.genesisInvoiceLines : [],
+    genesisPdfDocuments: Array.isArray(parsed?.genesisPdfDocuments) ? parsed.genesisPdfDocuments : [],
+    genesisHistory: Array.isArray(parsed?.genesisHistory) ? parsed.genesisHistory : [],
+  };
+}
+
+function readLegacyWebStore(): WebStore {
   if (typeof window === 'undefined' || !window.localStorage) {
     return emptyWebStore();
   }
@@ -512,29 +530,86 @@ function readWebStore(): WebStore {
 
   try {
     const parsed = JSON.parse(stored) as Partial<WebStore>;
-    return {
-      properties: Array.isArray(parsed.properties) ? parsed.properties : [],
-      reports: Array.isArray(parsed.reports) ? parsed.reports : [],
-      workItems: Array.isArray(parsed.workItems) ? parsed.workItems : [],
-      genesisImportRuns: Array.isArray(parsed.genesisImportRuns) ? parsed.genesisImportRuns : [],
-      genesisInstallations: Array.isArray(parsed.genesisInstallations) ? parsed.genesisInstallations : [],
-      genesisPlannedWork: Array.isArray(parsed.genesisPlannedWork) ? parsed.genesisPlannedWork : [],
-      genesisInvoices: Array.isArray(parsed.genesisInvoices) ? parsed.genesisInvoices : [],
-      genesisInvoiceLines: Array.isArray(parsed.genesisInvoiceLines) ? parsed.genesisInvoiceLines : [],
-      genesisPdfDocuments: Array.isArray(parsed.genesisPdfDocuments) ? parsed.genesisPdfDocuments : [],
-      genesisHistory: Array.isArray(parsed.genesisHistory) ? parsed.genesisHistory : [],
-    };
+    return normalizeWebStore(parsed);
   } catch {
     return emptyWebStore();
   }
 }
 
-function writeWebStore(store: WebStore): void {
-  if (typeof window === 'undefined' || !window.localStorage) {
+function openWebDatabase(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === 'undefined') {
+    return Promise.resolve(null);
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(WEB_DB_NAME, WEB_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(WEB_DB_STORE)) {
+        db.createObjectStore(WEB_DB_STORE, { keyPath: 'key' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB konnte nicht geoeffnet werden.'));
+  });
+}
+
+function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB-Anfrage fehlgeschlagen.'));
+  });
+}
+
+function transactionDone(transaction: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB-Transaktion fehlgeschlagen.'));
+    transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB-Transaktion abgebrochen.'));
+  });
+}
+
+async function readWebStore(): Promise<WebStore> {
+  const db = await openWebDatabase();
+  if (!db) {
+    return readLegacyWebStore();
+  }
+
+  try {
+    const transaction = db.transaction(WEB_DB_STORE, 'readonly');
+    const done = transactionDone(transaction);
+    const record = await requestToPromise<{ key: string; value: Partial<WebStore> } | undefined>(
+      transaction.objectStore(WEB_DB_STORE).get(WEB_STORE_KEY),
+    );
+    await done;
+    if (record?.value) {
+      return normalizeWebStore(record.value);
+    }
+    return readLegacyWebStore();
+  } finally {
+    db.close();
+  }
+}
+
+async function writeWebStore(store: WebStore): Promise<void> {
+  const normalized = normalizeWebStore(store);
+  const db = await openWebDatabase();
+  if (!db) {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(WEB_STORE_KEY, JSON.stringify(normalized));
+    }
     return;
   }
 
-  window.localStorage.setItem(WEB_STORE_KEY, JSON.stringify(store));
+  try {
+    const transaction = db.transaction(WEB_DB_STORE, 'readwrite');
+    const done = transactionDone(transaction);
+    await requestToPromise(transaction.objectStore(WEB_DB_STORE).put({ key: WEB_STORE_KEY, value: normalized }));
+    await done;
+    window.localStorage?.removeItem(WEB_STORE_KEY);
+  } finally {
+    db.close();
+  }
 }
 
 function parseJsonArray<T extends string>(value: string): T[] {
@@ -969,7 +1044,7 @@ function webReportBundle(store: WebStore, reportId: string): ReportBundle | null
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   if (isWeb) {
-    const store = readWebStore();
+    const store = await readWebStore();
     return {
       properties: store.properties.filter((property) => property.isActive !== false).length,
       drafts: store.reports.filter((report) => report.status === 'draft').length,
@@ -1007,7 +1082,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 export async function listProperties(query = '', limit = 30): Promise<CustomerProperty[]> {
   if (isWeb) {
     const lookup = compact(query).toLowerCase();
-    const store = readWebStore();
+    const store = await readWebStore();
     return store.properties
       .filter((property) => {
         if (!lookup) {
@@ -1078,7 +1153,7 @@ export async function listProperties(query = '', limit = 30): Promise<CustomerPr
 
 export async function getProperty(id: string): Promise<CustomerProperty | null> {
   if (isWeb) {
-    return readWebStore().properties.find((property) => property.id === id) ?? null;
+    return (await readWebStore()).properties.find((property) => property.id === id) ?? null;
   }
 
   const db = await initDatabase();
@@ -1263,7 +1338,7 @@ export async function upsertImportedProperties(
   properties: Array<Omit<CustomerProperty, 'id' | 'createdAt' | 'updatedAt'>>,
 ): Promise<ImportResult> {
   if (isWeb) {
-    const store = readWebStore();
+    const store = await readWebStore();
     const result: ImportResult = { inserted: 0, updated: 0, skipped: 0 };
     const timestamp = nowIso();
 
@@ -1295,7 +1370,7 @@ export async function upsertImportedProperties(
       }
     }
 
-    writeWebStore(store);
+    await writeWebStore(store);
     return result;
   }
 
@@ -1327,7 +1402,7 @@ export async function importGenesisBundle(
   fileName: string,
 ): Promise<GenesisImportResult> {
   if (isWeb) {
-    const store = readWebStore();
+    const store = await readWebStore();
     const timestamp = nowIso();
     const result: GenesisImportResult = {
       inserted: 0,
@@ -1461,7 +1536,7 @@ export async function importGenesisBundle(
       tableCounts: bundle.metadata.tableCounts,
     });
 
-    writeWebStore(store);
+    await writeWebStore(store);
     return result;
   }
 
@@ -1765,7 +1840,7 @@ export async function importGenesisBundle(
 
 export async function listGenesisImportRuns(limit = 5): Promise<GenesisImportRun[]> {
   if (isWeb) {
-    return readWebStore().genesisImportRuns.slice(0, limit);
+    return (await readWebStore()).genesisImportRuns.slice(0, limit);
   }
 
   const db = await initDatabase();
@@ -1781,7 +1856,7 @@ export async function listGenesisImportRuns(limit = 5): Promise<GenesisImportRun
 
 export async function getGenesisContext(propertyId: string): Promise<GenesisPropertyContext> {
   if (isWeb) {
-    const store = readWebStore();
+    const store = await readWebStore();
     const plannedWork = store.genesisPlannedWork
       .filter((item) => item.propertyId === propertyId)
       .map((item) => ({ ...normalizePlannedWorkItem(item), id: item.id, propertyId: item.propertyId }));
@@ -1861,7 +1936,7 @@ export async function getGenesisContext(propertyId: string): Promise<GenesisProp
 
 export async function createReport(propertyId: string): Promise<ServiceReport> {
   if (isWeb) {
-    const store = readWebStore();
+    const store = await readWebStore();
     const timestamp = nowIso();
     const report: ServiceReport = {
       id: createId('rep'),
@@ -1878,7 +1953,7 @@ export async function createReport(propertyId: string): Promise<ServiceReport> {
       exportedAt: null,
     };
     store.reports.push(report);
-    writeWebStore(store);
+    await writeWebStore(store);
     return report;
   }
 
@@ -1911,7 +1986,7 @@ export async function createReport(propertyId: string): Promise<ServiceReport> {
 
 export async function getReport(id: string): Promise<ServiceReport | null> {
   if (isWeb) {
-    return readWebStore().reports.find((report) => report.id === id) ?? null;
+    return (await readWebStore()).reports.find((report) => report.id === id) ?? null;
   }
 
   const db = await initDatabase();
@@ -1924,7 +1999,7 @@ export async function getReport(id: string): Promise<ServiceReport | null> {
 
 export async function getReportBundle(reportId: string): Promise<ReportBundle | null> {
   if (isWeb) {
-    return webReportBundle(readWebStore(), reportId);
+    return webReportBundle(await readWebStore(), reportId);
   }
 
   const db = await initDatabase();
@@ -1957,7 +2032,7 @@ export async function getReportBundle(reportId: string): Promise<ReportBundle | 
 
 export async function listReports(status?: ReportStatus): Promise<ReportBundle[]> {
   if (isWeb) {
-    const store = readWebStore();
+    const store = await readWebStore();
     return store.reports
       .filter((report) => (status ? report.status === status : true))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -1988,7 +2063,7 @@ export async function listReports(status?: ReportStatus): Promise<ReportBundle[]
 
 export async function saveReport(report: ServiceReport, workItems: WorkItem[]): Promise<void> {
   if (isWeb) {
-    const store = readWebStore();
+    const store = await readWebStore();
     const timestamp = nowIso();
     store.reports = store.reports.map((existing) =>
       existing.id === report.id
@@ -2022,7 +2097,7 @@ export async function saveReport(report: ServiceReport, workItems: WorkItem[]): 
           sortOrder: index,
         })),
     ];
-    writeWebStore(store);
+    await writeWebStore(store);
     return;
   }
 
@@ -2093,7 +2168,7 @@ export async function completeReport(report: ServiceReport, workItems: WorkItem[
   if (isWeb) {
     const timestamp = nowIso();
     await saveReport({ ...report, status: 'completed' }, workItems);
-    const updatedStore = readWebStore();
+    const updatedStore = await readWebStore();
     updatedStore.reports = updatedStore.reports.map((existing) =>
       existing.id === report.id
         ? {
@@ -2104,7 +2179,7 @@ export async function completeReport(report: ServiceReport, workItems: WorkItem[
           }
         : existing,
     );
-    writeWebStore(updatedStore);
+    await writeWebStore(updatedStore);
     return;
   }
 
@@ -2128,7 +2203,7 @@ export async function completeReport(report: ServiceReport, workItems: WorkItem[
 
 export async function markReportExported(reportId: string): Promise<void> {
   if (isWeb) {
-    const store = readWebStore();
+    const store = await readWebStore();
     const timestamp = nowIso();
     store.reports = store.reports.map((existing) =>
       existing.id === reportId
@@ -2140,7 +2215,7 @@ export async function markReportExported(reportId: string): Promise<void> {
           }
         : existing,
     );
-    writeWebStore(store);
+    await writeWebStore(store);
     return;
   }
 

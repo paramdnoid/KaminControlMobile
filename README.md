@@ -6,7 +6,7 @@ Expo/React-Native V1 fuer digitale Kaminfeger-Rapporte vor Ort.
 
 - Lokale Offline-App ohne Login, Backend oder Genesis-Synchronisation.
 - CSV/XLSX-Import fuer Kunden- und Liegenschaftsstammdaten.
-- Genesis-Import ueber einen lokalen Desktop-Converter: `Daten.zip` wird auf dem Desktop in `genesis-export-v1.json` umgewandelt.
+- Genesis-Import ueber einen lokalen Desktop-Converter: `Daten.zip` wird auf dem Desktop in `genesis-export-v2.json` umgewandelt.
 - Suche nach Kundennummer, Adresse, Ort und Kontaktrollen.
 - Read-only Genesis-Kontext pro Liegenschaft: Anlagen, geplante Arbeiten und Historie.
 - Rapport-Erfassung mit Datum, Uhrzeit, Bemerkungen, Kaminfegername und beliebig vielen Leistungspositionen.
@@ -47,7 +47,7 @@ npm run converter:start
 CLI-Konvertierung fuer Tests:
 
 ```bash
-npm run converter:convert -- /Users/andre/Desktop/Daten.zip /tmp/genesis-export-v1.json
+npm run converter:convert -- /Users/andre/Desktop/Daten.zip /tmp/genesis-export-v2.json
 ```
 
 Mapping-Tests:
@@ -56,7 +56,7 @@ Mapping-Tests:
 npm run converter:test
 ```
 
-Das erzeugte `genesis-export-v1.json` wird in der Mobile-App auf dem Import-Screen ueber `Genesis-Bundle wählen` importiert. `Daten.zip`, `.MDB`-Dateien und erzeugte Bundles sind gitignored.
+Das erzeugte `genesis-export-v2.json` wird in der Mobile-App auf dem Import-Screen ueber `Genesis-Bundle wählen` importiert. `Daten.zip`, `.MDB`-Dateien und erzeugte Bundles sind gitignored.
 
 ## Import
 

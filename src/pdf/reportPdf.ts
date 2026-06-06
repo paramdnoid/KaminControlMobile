@@ -1,5 +1,6 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 
 import { displayAddressRole, displayBuildingType, displayFuelTypes } from '../data/options';
 import type { ReportBundle } from '../types';
@@ -22,6 +23,52 @@ function multiline(label: string, value: string): string {
       <p>${escapeHtml(value || '-').replace(/\n/g, '<br />')}</p>
     </div>
   `;
+}
+
+function printReportHtmlOnWeb(html: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof document === 'undefined') {
+      reject(new Error('Web-Druck ist in dieser Umgebung nicht verfuegbar.'));
+      return;
+    }
+
+    const frame = document.createElement('iframe');
+    frame.title = 'KaminControlMobile Rapport PDF';
+    frame.style.border = '0';
+    frame.style.height = '1123px';
+    frame.style.opacity = '0';
+    frame.style.pointerEvents = 'none';
+    frame.style.position = 'fixed';
+    frame.style.right = '100%';
+    frame.style.top = '0';
+    frame.style.width = '794px';
+
+    frame.onload = () => {
+      const printWindow = frame.contentWindow;
+      if (!printWindow) {
+        document.body.removeChild(frame);
+        reject(new Error('Druckfenster konnte nicht geoeffnet werden.'));
+        return;
+      }
+
+      window.setTimeout(() => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+          window.setTimeout(() => {
+            document.body.removeChild(frame);
+            resolve();
+          }, 1000);
+        } catch (error) {
+          document.body.removeChild(frame);
+          reject(error instanceof Error ? error : new Error('PDF-Druck konnte nicht gestartet werden.'));
+        }
+      }, 100);
+    };
+
+    document.body.appendChild(frame);
+    frame.srcdoc = html;
+  });
 }
 
 export function buildStructuredReport(bundle: ReportBundle): string {
@@ -53,11 +100,16 @@ export function buildReportHtml(bundle: ReportBundle): string {
         <meta charset="utf-8" />
         <style>
           @page { margin: 26px; }
+          html {
+            background: #fff;
+          }
           body {
+            background: #fff;
             color: #221f1b;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             font-size: 12px;
             line-height: 1.36;
+            margin: 0;
           }
           h1 {
             border-bottom: 2px solid #221f1b;
@@ -103,6 +155,13 @@ export function buildReportHtml(bundle: ReportBundle): string {
             border-collapse: collapse;
             margin-top: 8px;
             width: 100%;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tr, .field, .multiline {
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
           th, td {
             border: 1px solid #d6cec0;
@@ -226,6 +285,11 @@ export function buildReportHtml(bundle: ReportBundle): string {
 }
 
 export async function createReportPdf(bundle: ReportBundle): Promise<string> {
+  if (Platform.OS === 'web') {
+    await printReportHtmlOnWeb(buildReportHtml(bundle));
+    return '';
+  }
+
   const { uri } = await Print.printToFileAsync({
     html: buildReportHtml(bundle),
     base64: false,
@@ -236,6 +300,10 @@ export async function createReportPdf(bundle: ReportBundle): Promise<string> {
 
 export async function shareReportPdf(bundle: ReportBundle): Promise<string> {
   const uri = await createReportPdf(bundle);
+  if (!uri) {
+    return uri;
+  }
+
   const available = await Sharing.isAvailableAsync();
 
   if (available) {

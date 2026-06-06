@@ -4,6 +4,10 @@ import JSZip from 'jszip';
 
 import type { GenesisBundlePdfDocument, GenesisBundlePreview, GenesisBundleV1 } from '../types';
 
+function normalizeMimeType(value: string | undefined): string {
+  return value?.toLowerCase() ?? '';
+}
+
 async function readAssetText(asset: DocumentPickerAsset): Promise<string> {
   if (asset.file && 'text' in asset.file) {
     return asset.file.text();
@@ -107,7 +111,7 @@ async function parseJsonText(text: string): Promise<GenesisBundleV1> {
   let parsed: unknown;
 
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(text.replace(/^\uFEFF/, ''));
   } catch {
     throw new Error('Genesis-Bundle ist kein gueltiges JSON.');
   }
@@ -174,7 +178,8 @@ async function parseZipAsset(asset: DocumentPickerAsset): Promise<GenesisBundleV
 }
 
 export async function parseGenesisBundleAsset(asset: DocumentPickerAsset): Promise<GenesisBundlePreview> {
-  const isZip = asset.name.toLowerCase().endsWith('.zip') || asset.mimeType === 'application/zip';
+  const mimeType = normalizeMimeType(asset.mimeType);
+  const isZip = asset.name.toLowerCase().endsWith('.zip') || mimeType === 'application/zip' || mimeType === 'application/x-zip-compressed';
   const parsed = isZip ? await parseZipAsset(asset) : await parseJsonText(await readAssetText(asset));
   const warnings = validateBundle(parsed);
   return {

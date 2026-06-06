@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { convertGenesisZip } from '../src/genesisConverter.ts';
+import { convertGenesisZip, stringifyMobileGenesisBundle } from '../src/genesisConverter.ts';
 
 async function main() {
   const sourcePath = process.argv[2];
@@ -13,7 +13,7 @@ async function main() {
 
   const result = await convertGenesisZip(sourcePath);
   await mkdir(path.dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, JSON.stringify(result.bundle, null, 2), 'utf8');
+  await writeFile(outputPath, stringifyMobileGenesisBundle(result.bundle), 'utf8');
 
   const objectTariffSuggestions = result.bundle.plannedWork.filter((item) => item.source === 'objectTariff' || item.source === 'tariff').length;
   const invoiceLineSuggestions = result.bundle.plannedWork.filter((item) => item.source === 'invoiceLine').length;

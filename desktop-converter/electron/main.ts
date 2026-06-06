@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import JSZip from 'jszip';
 
-import { convertGenesisZip } from '../src/genesisConverter.ts';
+import { convertGenesisZip, stringifyMobileGenesisBundle, toMobileGenesisBundle } from '../src/genesisConverter.ts';
 import type { GenesisBundleV1 } from '../../src/types.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -30,11 +30,12 @@ function createWindow() {
 }
 
 async function writeGenesisExportFolder(sourcePath: string, bundle: GenesisBundleV1, targetDirectory: string): Promise<string> {
+  const mobileBundle = toMobileGenesisBundle(bundle);
   await mkdir(targetDirectory, { recursive: true });
   const jsonPath = path.join(targetDirectory, 'genesis-export-v2.json');
-  await writeFile(jsonPath, JSON.stringify(bundle, null, 2), 'utf8');
+  await writeFile(jsonPath, stringifyMobileGenesisBundle(mobileBundle), 'utf8');
 
-  const pdfDocuments = bundle.pdfDocuments ?? [];
+  const pdfDocuments = mobileBundle.pdfDocuments ?? [];
   if (!pdfDocuments.length) {
     return targetDirectory;
   }
@@ -57,11 +58,15 @@ async function writeGenesisExportFolder(sourcePath: string, bundle: GenesisBundl
 }
 
 async function writeGenesisTransportZip(sourcePath: string, bundle: GenesisBundleV1, targetPath: string): Promise<string> {
+  const mobileBundle = toMobileGenesisBundle(bundle);
   const sourceZip = await JSZip.loadAsync(await readFile(sourcePath));
   const targetZip = new JSZip();
-  targetZip.file('genesis-export-v2.json', JSON.stringify(bundle, null, 2));
+  targetZip.file('genesis-export-v2.json', stringifyMobileGenesisBundle(mobileBundle), {
+    compression: 'DEFLATE',
+    compressionOptions: { level: 9 },
+  });
 
-  for (const document of bundle.pdfDocuments ?? []) {
+  for (const document of mobileBundle.pdfDocuments ?? []) {
     if (!document.archivePath || !document.relativePath) {
       continue;
     }
@@ -69,7 +74,7 @@ async function writeGenesisTransportZip(sourcePath: string, bundle: GenesisBundl
     if (!entry || entry.dir) {
       continue;
     }
-    targetZip.file(document.relativePath, await entry.async('nodebuffer'));
+    targetZip.file(document.relativePath, await entry.async('nodebuffer'), { compression: 'STORE' });
   }
 
   await writeFile(targetPath, await targetZip.generateAsync({ compression: 'STORE', type: 'nodebuffer' }));
@@ -87,7 +92,11 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('convert-genesis-zip', async (_event, zipPath: string) => {
-    return convertGenesisZip(zipPath);
+    const result = await convertGenesisZip(zipPath);
+    return {
+      ...result,
+      bundle: toMobileGenesisBundle(result.bundle),
+    };
   });
 
   ipcMain.handle('save-genesis-export-folder', async (_event, payload: { sourcePath: string; bundle: GenesisBundleV1 }) => {

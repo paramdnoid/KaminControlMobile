@@ -60,9 +60,10 @@ export default function ImportScreen() {
     setGenesisResult(null);
     try {
       const picked = await DocumentPicker.getDocumentAsync({
+        base64: false,
         copyToCacheDirectory: true,
         multiple: false,
-        type: ['application/json', 'text/json', 'text/plain', 'application/zip', 'application/x-zip-compressed'],
+        type: '*/*',
       });
 
       if (!picked.canceled && picked.assets[0]) {
@@ -101,8 +102,10 @@ export default function ImportScreen() {
 
     setGenesisSaving(true);
     try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
       const nextResult = await importGenesisBundle(genesisPreview.bundle, genesisPreview.fileName);
       setGenesisResult(nextResult);
+      setGenesisPreview(null);
     } catch (error) {
       Alert.alert('Genesis-Speichern fehlgeschlagen', error instanceof Error ? error.message : 'Genesis-Bundle konnte nicht gespeichert werden.');
     } finally {
@@ -213,12 +216,15 @@ export default function ImportScreen() {
               <Text style={styles.text}>Weitere {genesisPreview.warnings.length - 5} Warnungen werden im Importlauf gespeichert.</Text>
             ) : null}
             <Button
-              label="Genesis-Bundle importieren"
+              label={genesisSaving ? 'Genesis-Import läuft...' : 'Genesis-Bundle importieren'}
               icon={FileJson2}
               loading={genesisSaving}
               onPress={saveGenesisImport}
               variant="primary"
             />
+            {genesisSaving ? (
+              <Text style={styles.text}>Import wird lokal gespeichert. Bei grossen Genesis-Bundles kann das einen Moment dauern.</Text>
+            ) : null}
           </Card>
         </>
       ) : null}

@@ -85,6 +85,32 @@ export type ConverterResult = {
 const CONVERTER_VERSION = '2.0.0';
 const CORE_DATABASES = ['KFDSTAMM.MDB', 'ARBVOL.MDB', 'Anschriften.MDB', 'FKSTAMM.MDB'];
 const AUDIT_DATABASES = ['KFKRECH.MDB', 'OPSTAMM.MDB'];
+const MOBILE_OMITTED_AUDIT_KEYS = new Set(['raw', 'rawRefs']);
+
+function stripMobileAuditFields<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(stripMobileAuditFields) as T;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  return Object.entries(value).reduce<Record<string, unknown>>((acc, [key, entry]) => {
+    if (!MOBILE_OMITTED_AUDIT_KEYS.has(key)) {
+      acc[key] = stripMobileAuditFields(entry);
+    }
+    return acc;
+  }, {}) as T;
+}
+
+export function toMobileGenesisBundle(bundle: GenesisBundleV1): GenesisBundleV1 {
+  return stripMobileAuditFields(bundle);
+}
+
+export function stringifyMobileGenesisBundle(bundle: GenesisBundleV1): string {
+  return JSON.stringify(toMobileGenesisBundle(bundle));
+}
 
 const monthByNumber: Record<number, CleaningMonth> = {
   1: 'Jan',
@@ -121,6 +147,24 @@ function cleanHouse(value: unknown): string {
 
 export function buildSourceKey(group: unknown, street: unknown, house: unknown, suffix: unknown): string {
   return [clean(group), clean(street), cleanHouse(house), clean(suffix || 0)].join('-');
+}
+
+function sourceKeyNumberPart(value: string): string {
+  return /^\d+$/.test(value) ? String(Number(value)) : value;
+}
+
+export function sourceKeyFromKfkCustomerNumber(value: unknown): string {
+  const normalized = clean(value);
+  const match = normalized.match(/^(\d{3})(\d{3})(\S+)\s+(\S+)$/);
+  if (!match) {
+    return '';
+  }
+  return buildSourceKey(
+    sourceKeyNumberPart(match[1]),
+    sourceKeyNumberPart(match[2]),
+    match[3],
+    sourceKeyNumberPart(match[4]),
+  );
 }
 
 function parsePostalCity(value: unknown): { postalCode: string; city: string } {
@@ -519,6 +563,11 @@ export function mapInvoiceFallbackProperty(invoice: GenesisBundleInvoice): Genes
   const postalCity = parsePostalCity(propertyAddressLines[0] || invoiceAddressLines.find((line) => /^\d{4}\s+/.test(line)) || '');
   const street = propertyAddressLines[1] || invoiceAddressLines.find((line) => !/^\d{4}\s+/.test(line)) || '';
   const propertyLabel = propertyAddressLines[2] || invoiceAddressLines[1] || invoiceAddressLines[0] || '';
+  const fallbackSource = invoice.raw?.op
+    ? 'OPSTAMM.OP'
+    : invoice.raw?.rechDivers
+      ? 'KFKRECH.RechDivers'
+      : 'Rechnungsdaten';
 
   return {
     sourceKey: invoice.sourceKey,
@@ -547,7 +596,7 @@ export function mapInvoiceFallbackProperty(invoice: GenesisBundleInvoice): Genes
     cleaningMonths: [],
     notes: `Fallback-Liegenschaft aus Rechnung ${invoice.invoiceNumber}; in KFDSTAMM/GebStamm nicht vorhanden.`,
     rawRefs: {
-      fallback: 'OPSTAMM.OP',
+      fallback: fallbackSource,
       invoiceNumber: invoice.invoiceNumber,
     },
   };
@@ -767,6 +816,56 @@ export function mapInvoice(row: Row, rechDiversByNumber: Map<number, Row>): Gene
   };
 }
 
+export function mapKfkInvoice(row: Row): GenesisBundleInvoice | null {
+  const invoiceNumber = clean(row.OPRechNr);
+  const sourceKey = sourceKeyFromKfkCustomerNumber(row.KuNrOP);
+  if (!invoiceNumber || !sourceKey) {
+    return null;
+  }
+
+  return {
+    sourceKey,
+    invoiceKey: `${sourceKey}-KFK-INVOICE-${invoiceNumber}`,
+    invoiceNumber,
+    workDate: '',
+    invoiceDate: '',
+    dueDate: '',
+    paidDate: '',
+    status: 'unknown',
+    dunningLevel: '',
+    netAmount: formatMoney(row.RNetto),
+    vatAmount: formatMoney(row.RMWST1),
+    totalAmount: formatMoney(row.RTotal),
+    paidAmount: '',
+    invoiceAddress: addressFromParts([
+      row.RAdr1,
+      row.RAdr2,
+      row.RAdr3,
+      row.RAdr4,
+      row.RAdr5,
+      row.RAdr6,
+      row.RAdr7,
+      row.RAdr8,
+      row.RAdr9,
+      row.RAdr10,
+      row.RAdr11,
+      row.RAdr12,
+      row.RAdr13,
+      row.RAdr14,
+      row.RAdr15,
+      row.RAdr16,
+    ]),
+    propertyAddress: addressFromParts([
+      row.RLieg1,
+      row.RLieg2,
+      row.RLieg3,
+      row.RLieg4,
+    ]),
+    notes: 'KFK-Rechnung ohne OPSTAMM.OP-Eintrag.',
+    raw: { rechDivers: row },
+  };
+}
+
 export function mapInvoiceLine(row: Row, invoice: GenesisBundleInvoice): GenesisBundleInvoiceLine {
   const tariffCode = clean(row.RechTarif);
   const quantity = parseAmount(row.RechAnz) > 0 ? formatQuantity(row.RechAnz) : '';
@@ -794,7 +893,8 @@ export function mapInvoiceLine(row: Row, invoice: GenesisBundleInvoice): Genesis
 
 export function mapKfkInvoiceLine(row: Row, invoice: GenesisBundleInvoice): GenesisBundleInvoiceLine {
   const quantity = parseAmount(row.PossAnz) > 0 ? formatQuantity(row.PossAnz) : '';
-  const amount = formatMoney(row.PossPreis);
+  const amountSource = parseAmount(row.PossPreis) ? row.PossPreis : row.PossGes;
+  const amount = formatMoney(amountSource);
   const position = clean(row.PossNr);
   const description = clean(row.PossBez);
   const lineType: GenesisWorkLineType = amount || quantity ? 'charge' : 'text';
@@ -809,7 +909,7 @@ export function mapKfkInvoiceLine(row: Row, invoice: GenesisBundleInvoice): Gene
     marker: '',
     quantity,
     description: description || 'Rechnungsposition',
-    unitPrice: formatUnitPriceFromAmount(row.PossPreis, row.PossAnz),
+    unitPrice: formatUnitPriceFromAmount(amountSource, row.PossAnz),
     amount,
     taxPoints: '',
     notes: clean(row.PossMWST) ? `MWST ${clean(row.PossMWST)}` : '',
@@ -887,6 +987,12 @@ function invoiceNumberFromPdfName(fileName: string): string {
   return clean(fileName.match(/^(\d+)-(?:rechnung|mahnung|zahlungserinnerung)/i)?.[1] ?? '');
 }
 
+function invoiceNumberFromPdfEntryName(entryName: string): string {
+  const normalizedPath = normalizedZipPath(entryName);
+  const fileName = normalizedPath.split('/').pop() ?? normalizedPath;
+  return invoiceNumberFromPdfName(fileName);
+}
+
 function rapportInfoFromPdfName(fileName: string): { sourceKey: string; date: string } {
   const match = fileName.match(/^(\d+)-(\d+)-(.+)-([^-]+)-\d+-Rapport[^-]*-(\d{8})?\.pdf$/i);
   if (!match) {
@@ -928,6 +1034,23 @@ export function mapPdfDocument(
     matched,
     raw: { archivePath: entryName },
   };
+}
+
+export function countUnmatchedAssignablePdfDocuments(documents: GenesisBundlePdfDocument[]): number {
+  return documents.filter((document) => document.kind !== 'export' && !document.matched).length;
+}
+
+function documentCountsFor(documents: GenesisBundlePdfDocument[]): Record<string, number> {
+  return documents.reduce<Record<string, number>>((counts, document) => {
+    counts[document.kind] = (counts[document.kind] ?? 0) + 1;
+    if (!document.matched) {
+      counts.unmatched = (counts.unmatched ?? 0) + 1;
+    }
+    if (document.kind !== 'export' && !document.matched) {
+      counts.unmatchedAssignable = (counts.unmatchedAssignable ?? 0) + 1;
+    }
+    return counts;
+  }, {});
 }
 
 async function readZipDatabase(zip: JSZip, fileName: string, warnings: string[]): Promise<TableMap> {
@@ -1065,6 +1188,10 @@ export async function convertGenesisZip(zipPath: string): Promise<ConverterResul
   const opInvoiceLineRows = databases['OPSTAMM.MDB']?.RechPos ?? [];
   const rechDiversRows = databases['KFKRECH.MDB']?.RechDivers ?? [];
   const kfkInvoiceLineRows = databases['KFKRECH.MDB']?.RechZeilen ?? [];
+  const zipFileEntries = Object.entries(zip.files)
+    .filter(([, entry]) => !entry.dir)
+    .map(([entryName]) => entryName);
+  const pdfInvoiceNumbers = new Set(zipFileEntries.map(invoiceNumberFromPdfEntryName).filter(Boolean));
 
   const installations = fkRows.map(mapInstallation);
   const installationSourceKeys = new Set(installations.map((item) => item.sourceKey));
@@ -1089,6 +1216,14 @@ export async function convertGenesisZip(zipPath: string): Promise<ConverterResul
     .map((row) => mapInvoice(row, rechDiversByNumber))
     .filter((invoice) => invoice.invoiceNumber && invoice.sourceKey);
   const invoicesByNumber = new Map(invoices.map((invoice) => [invoice.invoiceNumber, invoice]));
+  for (const row of rechDiversRows) {
+    const invoice = mapKfkInvoice(row);
+    if (!invoice || invoicesByNumber.has(invoice.invoiceNumber) || !pdfInvoiceNumbers.has(invoice.invoiceNumber)) {
+      continue;
+    }
+    invoices.push(invoice);
+    invoicesByNumber.set(invoice.invoiceNumber, invoice);
+  }
 
   const fallbackCounts = {
     fk: 0,
@@ -1142,17 +1277,10 @@ export async function convertGenesisZip(zipPath: string): Promise<ConverterResul
     .filter((line) => latestInvoiceNumbers.has(line.invoiceNumber))
     .map(plannedWorkFromInvoiceLine);
   const history = (kfdTables.Archiv ?? []).map(mapHistory);
-  const pdfDocuments = Object.entries(zip.files)
-    .filter(([, entry]) => !entry.dir)
-    .map(([entryName]) => mapPdfDocument(entryName, new Set(invoicesByNumber.keys()), propertySourceKeys))
+  const pdfDocuments = zipFileEntries
+    .map((entryName) => mapPdfDocument(entryName, new Set(invoicesByNumber.keys()), propertySourceKeys))
     .filter((document): document is GenesisBundlePdfDocument => Boolean(document));
-  const documentCounts = pdfDocuments.reduce<Record<string, number>>((counts, document) => {
-    counts[document.kind] = (counts[document.kind] ?? 0) + 1;
-    if (!document.matched) {
-      counts.unmatched = (counts.unmatched ?? 0) + 1;
-    }
-    return counts;
-  }, {});
+  const documentCounts = documentCountsFor(pdfDocuments);
 
   for (const sourceKey of installationSourceKeys) {
     if (!propertySourceKeys.has(sourceKey)) {
@@ -1178,9 +1306,9 @@ export async function convertGenesisZip(zipPath: string): Promise<ConverterResul
   if (fallbackCounts.invoice) {
     warnings.push(`${fallbackCounts.invoice} Liegenschaften wurden nur aus Rechnungsdaten ergänzt.`);
   }
-  const unmatchedPdfCount = pdfDocuments.filter((document) => !document.matched).length;
+  const unmatchedPdfCount = countUnmatchedAssignablePdfDocuments(pdfDocuments);
   if (unmatchedPdfCount) {
-    warnings.push(`${unmatchedPdfCount} PDF-Dokumente konnten keiner Liegenschaft/Rechnung eindeutig zugeordnet werden.`);
+    warnings.push(`${unmatchedPdfCount} zuordnungsrelevante PDF-Dokumente konnten keiner Liegenschaft/Rechnung eindeutig zugeordnet werden.`);
   }
 
   return {
