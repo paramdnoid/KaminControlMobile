@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
@@ -67,7 +67,10 @@ export default function ReportScreen() {
   const [showJson, setShowJson] = useState(false);
   const [suggestionTab, setSuggestionTab] = useState<SuggestionTab>('objectTariff');
   const [expandedItemIds, setExpandedItemIds] = useState<string[]>([]);
-  const hydrated = useRef(false);
+  // isDirty tracks whether the user has made changes since last load/save.
+  // Using state (not a ref) ensures the autosave effect observes the correct value
+  // even under React's concurrent scheduler.
+  const [isDirty, setIsDirty] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) {
@@ -87,7 +90,8 @@ export default function ReportScreen() {
           ? [emptyWorkItem(nextBundle.report.id, 0)]
           : [],
     );
-    hydrated.current = true;
+    // Reset dirty flag after load — prevents autosave firing on re-focus with no changes
+    setIsDirty(false);
     setLoading(false);
   }, [id]);
 
@@ -98,7 +102,7 @@ export default function ReportScreen() {
   );
 
   useEffect(() => {
-    if (!hydrated.current || !report) {
+    if (!isDirty || !report) {
       return undefined;
     }
 
@@ -111,26 +115,38 @@ export default function ReportScreen() {
     }, 700);
 
     return () => clearTimeout(timeout);
-  }, [report, workItems]);
+  }, [report, workItems, isDirty]);
+
+  // Compute once per render cycle; used by structuredJson, suggestion checks, and JSX meta
+  const cleanItems = useMemo(() => cleanWorkItems(workItems), [workItems]);
+
+  // Set of work item signatures for O(1) "already applied" checks across up to 16 suggestion rows
+  const cleanSignatures = useMemo(
+    () => new Set(cleanItems.map(workItemSignature)),
+    [cleanItems],
+  );
 
   const structuredJson = useMemo(() => {
     if (!bundle || !report) {
       return '';
     }
-    return buildStructuredReport({ ...bundle, report, workItems: cleanWorkItems(workItems) });
-  }, [bundle, report, workItems]);
+    return buildStructuredReport({ ...bundle, report, workItems: cleanItems });
+  }, [bundle, report, cleanItems]);
 
   function updateReport(patch: Partial<ServiceReport>) {
+    setIsDirty(true);
     setReport((current) => (current ? { ...current, ...patch } : current));
   }
 
   function updateWorkItem(index: number, patch: Partial<WorkItem>) {
+    setIsDirty(true);
     setWorkItems((current) =>
       current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)),
     );
   }
 
   function removeWorkItem(index: number) {
+    setIsDirty(true);
     setWorkItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   }
 
@@ -138,6 +154,7 @@ export default function ReportScreen() {
     if (!report) {
       return;
     }
+    setIsDirty(true);
     const item = emptyWorkItem(report.id, workItems.length);
     setExpandedItemIds((current) => [...current, item.id]);
     setWorkItems((current) => [...current, item]);
@@ -198,11 +215,11 @@ export default function ReportScreen() {
   }
 
   function isSuggestedWorkApplied(work: GenesisPlannedWork): boolean {
-    return cleanWorkItems(workItems).some((item) => workItemSignature(item) === workItemSignature(workFromPlannedSuggestion(item.reportId, work)));
+    return cleanSignatures.has(workItemSignature(workFromPlannedSuggestion(report?.id ?? '', work)));
   }
 
   function isHistoryApplied(entry: GenesisHistoryEntry): boolean {
-    return cleanWorkItems(workItems).some((item) => workItemSignature(item) === workItemSignature(workFromHistory(item.reportId, entry)));
+    return cleanSignatures.has(workItemSignature(workFromHistory(report?.id ?? '', entry)));
   }
 
   function toggleItem(id: string) {
@@ -293,8 +310,10 @@ export default function ReportScreen() {
   const property = bundle.property;
   const isCompleted = report.status === 'completed' || report.status === 'exported';
   const objectTariffSuggestions = genesisContext?.objectTariffSuggestions ?? [];
-  const allTariffSuggestionsApplied = objectTariffSuggestions.filter((work) => work.lineType !== 'control').length > 0
-    && objectTariffSuggestions.filter((work) => work.lineType !== 'control').every((work) => isSuggestedWorkApplied(work));
+  // isSuggestedWorkApplied is O(1) via cleanSignatures Set, so no separate memo needed
+  const applicableTariffs = objectTariffSuggestions.filter((work) => work.lineType !== 'control');
+  const allTariffSuggestionsApplied =
+    applicableTariffs.length > 0 && applicableTariffs.every((work) => isSuggestedWorkApplied(work));
 
   return (
     <Screen
@@ -349,7 +368,7 @@ export default function ReportScreen() {
         </View>
       </Card>
 
-      <SectionHeader title="Arbeiten vor Ort" meta={`${cleanWorkItems(workItems).length} Positionen mit Inhalt`} />
+      <SectionHeader title="Arbeiten vor Ort" meta={`${cleanItems.length} Positionen mit Inhalt`} />
       {!isCompleted && genesisContext ? (
         <Card>
           <View style={styles.suggestionHeader}>

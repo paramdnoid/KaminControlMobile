@@ -38,14 +38,14 @@ export default function PropertyDetailScreen() {
     }
 
     setLoading(true);
-    const [nextProperty, allReports, nextGenesisContext] = await Promise.all([
+    const [nextProperty, nextReports, nextGenesisContext] = await Promise.all([
       getProperty(id),
-      listReports(),
+      listReports(undefined, id),
       getGenesisContext(id),
     ]);
     setProperty(nextProperty);
     setGenesisContext(nextGenesisContext);
-    setReports(allReports.filter((bundle) => bundle.property.id === id));
+    setReports(nextReports);
     setLoading(false);
   }, [id]);
 

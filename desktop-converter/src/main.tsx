@@ -78,7 +78,7 @@ function App() {
   }
 
   const warningCount = result?.bundle.metadata.warnings.length ?? 0;
-  const objectTariffSuggestionCount = result?.bundle.plannedWork.filter((item) => item.source === 'objectTariff' || item.source === 'tariff').length ?? 0;
+  const objectTariffSuggestionCount = result?.bundle.plannedWork.filter((item) => item.source === 'objectTariff').length ?? 0;
   const invoiceLineSuggestionCount = result?.bundle.plannedWork.filter((item) => item.source === 'invoiceLine').length ?? 0;
   const arbvolCount = result?.bundle.plannedWork.filter((item) => item.source === 'arbvol').length ?? 0;
   const documentCounts = result?.bundle.metadata.documentCounts ?? {};

@@ -18,6 +18,7 @@
 - Converter build: `npm run converter:build`
 - Converter UI: `npm run converter:start`
 - Converter CLI: `npm run converter:convert -- <Daten.zip> <output.json>`
+- Lint: `npm run lint`, `npm run lint:fix`
 - Claude settings schema: `npm run claude:validate-settings`
 
 ## Routing
@@ -45,10 +46,10 @@ Use the main thread as orchestrator. Specialists do not call other agents. When 
 ## Validation
 
 - Config-only changes: parse JSON, run `npm run claude:validate-settings`, compile Python hooks, check agent skill links, run hook simulations, and `git diff --check -- CLAUDE.md .claude .gitignore`.
-- App or shared TypeScript changes: `npm run typecheck`.
+- App or shared TypeScript changes: `npm run typecheck` and `npm run lint`.
 - Converter changes: `npm run typecheck`, `npm run converter:test`, and `npm run converter:build`.
-- PDF/report flow changes: include `npm run typecheck` and manually inspect generated HTML/JSON logic; no automated PDF regression suite exists yet.
-- UI changes: run `npm run typecheck` and manually smoke the relevant Expo screen; no mobile E2E suite exists yet.
+- PDF/report flow changes: include `npm run typecheck` + `npm run lint` and manually inspect generated HTML/JSON logic.
+- UI changes: run `npm run typecheck` + `npm run lint` and manually smoke the relevant Expo screen; no mobile E2E suite exists yet.
 
 ## Context And Effort
 

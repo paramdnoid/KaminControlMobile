@@ -226,11 +226,17 @@ function normalizeCompactDate(value: string): string {
   return `${match[3]}-${match[2]}-${match[1]}`;
 }
 
-function invoiceStatus(total: unknown, paid: unknown, paidDate: unknown): GenesisInvoiceStatus {
+export function invoiceStatus(total: unknown, paid: unknown, paidDate: unknown): GenesisInvoiceStatus {
+  const totalStr = clean(total);
+  // Missing/empty total — can only determine status from paidDate
+  if (!totalStr) {
+    return clean(paidDate) ? 'paid' : 'unknown';
+  }
   const totalAmount = parseAmount(total);
   const paidAmount = parseAmount(paid);
-  if (!totalAmount) {
-    return clean(paidDate) ? 'paid' : 'unknown';
+  // Zero-balance invoices (credit notes, reversals) are always settled
+  if (totalAmount === 0) {
+    return 'paid';
   }
   if (paidAmount >= totalAmount || clean(paidDate)) {
     return 'paid';

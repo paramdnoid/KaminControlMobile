@@ -94,10 +94,12 @@ function validateBundle(bundle: GenesisBundleV1): string[] {
 async function readAssetBase64(asset: DocumentPickerAsset): Promise<string> {
   if (asset.file && 'arrayBuffer' in asset.file) {
     const buffer = await asset.file.arrayBuffer();
+    // Process in 64 KiB chunks to avoid O(n²) string growth and apply() stack overflows
+    const CHUNK = 65536;
     let binary = '';
     const bytes = new Uint8Array(buffer);
-    for (let index = 0; index < bytes.length; index += 1) {
-      binary += String.fromCharCode(bytes[index]);
+    for (let offset = 0; offset < bytes.length; offset += CHUNK) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + CHUNK));
     }
     return btoa(binary);
   }
@@ -141,6 +143,14 @@ async function persistZipPdfs(zip: JSZip, documents: GenesisBundlePdfDocument[] 
 
   const nextDocuments: GenesisBundlePdfDocument[] = [];
   for (const document of documents) {
+    // Guard against path traversal in relativePath (defense-in-depth on the mobile side)
+    const safePath = document.relativePath.replace(/\\/g, '/');
+    if (!safePath.startsWith('pdfs/') || safePath.includes('..')) {
+      // Skip unsafe path — document is preserved as metadata-only (no localUri)
+      nextDocuments.push(document);
+      continue;
+    }
+
     const entryName = document.relativePath || document.archivePath;
     const entry = entryName
       ? zip.file(entryName) ?? zip.file(new RegExp(`${entryName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))[0]
@@ -149,7 +159,7 @@ async function persistZipPdfs(zip: JSZip, documents: GenesisBundlePdfDocument[] 
       nextDocuments.push(document);
       continue;
     }
-    const localUri = `${baseDirectory}${document.relativePath}`;
+    const localUri = `${baseDirectory}${safePath}`;
     await ensureDirectoryFor(localUri);
     await FileSystem.writeAsStringAsync(localUri, await entry.async('base64'), {
       encoding: FileSystem.EncodingType.Base64,

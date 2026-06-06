@@ -139,7 +139,7 @@ export type GenesisInstallation = {
   notes: string;
 };
 
-export type GenesisSuggestionSource = 'tariff' | 'objectTariff' | 'invoiceLine' | 'arbvol' | 'history';
+export type GenesisSuggestionSource = 'objectTariff' | 'invoiceLine' | 'arbvol' | 'history';
 export type GenesisWorkLineType = 'text' | 'charge' | 'control';
 export type GenesisPdfDocumentKind = 'invoice' | 'reminder' | 'paymentReminder' | 'rapport' | 'export' | 'other';
 export type GenesisInvoiceStatus = 'open' | 'paid' | 'partial' | 'unknown';
@@ -243,7 +243,6 @@ export type GenesisPropertyContext = {
   pdfDocuments: GenesisPdfDocument[];
   objectTariffSuggestions: GenesisPlannedWork[];
   invoiceLineSuggestions: GenesisPlannedWork[];
-  tariffSuggestions: GenesisPlannedWork[];
   arbvolSummary: GenesisPlannedWork[];
   plannedWork: GenesisPlannedWork[];
   history: GenesisHistoryEntry[];

@@ -1,0 +1,6 @@
+- [Quality Audit 2026-06](project_quality_audit_2026_06.md) — 17-task audit from June 2026; all tasks completed 2026-06-07, TODO.md deleted
+- [TODO.md Location](project_todo_location.md) — TODO.md deleted 2026-06-07; no open remediation backlog remains
+- [tariffSuggestions Decision](project_tariff_suggestions_decision.md) — TASK-04 chose Option A: removed dead field + 'tariff' literal from the type union
+- [N+1 Query Fix Pattern](project_n_plus_one_fix.md) — TASK-01/02: batched 3-query approach for listReports; IN-clause spread pattern
+- [Autosave isDirty Pattern](project_autosave_isdirty.md) — TASK-10: replaced useRef hydrated guard with isDirty useState in ReportScreen
+- [Base64 Chunked Pattern](project_base64_chunked.md) — TASK-03: 64 KiB chunk fromCharCode for large ZIP base64 conversion

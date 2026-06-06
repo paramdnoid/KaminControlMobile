@@ -476,12 +476,23 @@ export async function initDatabase(): Promise<SQLiteDatabase | null> {
   return dbPromise;
 }
 
+const SCHEMA_MIGRATION_TABLES = new Set([
+  'customer_properties',
+  'genesis_planned_work',
+]);
+
 async function ensureColumn(
   db: SQLiteDatabase,
   tableName: string,
   columnName: string,
   definition: string,
 ): Promise<void> {
+  if (!SCHEMA_MIGRATION_TABLES.has(tableName)) {
+    throw new Error(`ensureColumn: unrecognized table '${tableName}'`);
+  }
+  if (!/^[a-z_][a-z0-9_]*$/.test(columnName)) {
+    throw new Error(`ensureColumn: invalid column name '${columnName}'`);
+  }
   const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${tableName})`);
   if (!columns.some((column) => column.name === columnName)) {
     await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
@@ -615,7 +626,9 @@ async function writeWebStore(store: WebStore): Promise<void> {
 function parseJsonArray<T extends string>(value: string): T[] {
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? (parsed.filter((item): item is T => typeof item === 'string') as T[])
+      : [];
   } catch {
     return [];
   }
@@ -760,7 +773,7 @@ function mapGenesisPlannedWork(row: GenesisPlannedWorkRow): GenesisPlannedWork {
 }
 
 function normalizeSuggestionSource(source: unknown): GenesisPlannedWork['source'] {
-  if (source === 'tariff' || source === 'objectTariff') {
+  if (source === 'objectTariff') {
     return 'objectTariff';
   }
   if (source === 'invoiceLine') {
@@ -1875,7 +1888,6 @@ export async function getGenesisContext(propertyId: string): Promise<GenesisProp
         .sort((a, b) => (b.date || b.invoiceNumber).localeCompare(a.date || a.invoiceNumber)),
       objectTariffSuggestions: plannedWork.filter((item) => item.source === 'objectTariff'),
       invoiceLineSuggestions: plannedWork.filter((item) => item.source === 'invoiceLine'),
-      tariffSuggestions: plannedWork.filter((item) => item.source === 'objectTariff'),
       arbvolSummary: plannedWork.filter((item) => item.source === 'arbvol'),
       plannedWork,
       history: store.genesisHistory
@@ -1927,7 +1939,6 @@ export async function getGenesisContext(propertyId: string): Promise<GenesisProp
     pdfDocuments: pdfDocumentRows.map(mapGenesisPdfDocument),
     objectTariffSuggestions: plannedWork.filter((item) => item.source === 'objectTariff'),
     invoiceLineSuggestions: plannedWork.filter((item) => item.source === 'invoiceLine'),
-    tariffSuggestions: plannedWork.filter((item) => item.source === 'objectTariff'),
     arbvolSummary: plannedWork.filter((item) => item.source === 'arbvol'),
     plannedWork,
     history: historyRows.map(mapGenesisHistory),
@@ -2030,11 +2041,12 @@ export async function getReportBundle(reportId: string): Promise<ReportBundle | 
   };
 }
 
-export async function listReports(status?: ReportStatus): Promise<ReportBundle[]> {
+export async function listReports(status?: ReportStatus, propertyId?: string): Promise<ReportBundle[]> {
   if (isWeb) {
     const store = await readWebStore();
     return store.reports
       .filter((report) => (status ? report.status === status : true))
+      .filter((report) => !propertyId || report.propertyId === propertyId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map((report) => webReportBundle(store, report.id))
       .filter((bundle): bundle is ReportBundle => Boolean(bundle));
@@ -2044,19 +2056,64 @@ export async function listReports(status?: ReportStatus): Promise<ReportBundle[]
   if (!db) {
     throw new Error('Datenbank nicht verfuegbar.');
   }
-  const reportRows = status
-    ? await db.getAllAsync<ReportRow>(
-        'SELECT * FROM service_reports WHERE status = ? ORDER BY updated_at DESC',
-        status,
-      )
-    : await db.getAllAsync<ReportRow>('SELECT * FROM service_reports ORDER BY updated_at DESC');
+
+  const conditions: string[] = [];
+  const params: string[] = [];
+  if (status) {
+    conditions.push('status = ?');
+    params.push(status);
+  }
+  if (propertyId) {
+    conditions.push('property_id = ?');
+    params.push(propertyId);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const reportRows = await db.getAllAsync<ReportRow>(
+    `SELECT * FROM service_reports ${where} ORDER BY updated_at DESC`,
+    ...params,
+  );
+
+  if (reportRows.length === 0) {
+    return [];
+  }
+
+  const reportIds = reportRows.map((row) => row.id);
+  const uniquePropertyIds = [...new Set(reportRows.map((row) => row.property_id))];
+
+  const [propertyRows, itemRows] = await Promise.all([
+    db.getAllAsync<PropertyRow>(
+      `SELECT * FROM customer_properties WHERE id IN (${uniquePropertyIds.map(() => '?').join(', ')})`,
+      ...uniquePropertyIds,
+    ),
+    db.getAllAsync<WorkItemRow>(
+      `SELECT * FROM work_items WHERE report_id IN (${reportIds.map(() => '?').join(', ')}) ORDER BY sort_order ASC`,
+      ...reportIds,
+    ),
+  ]);
+
+  const propertyMap = new Map(propertyRows.map((row) => [row.id, row]));
+  const itemsByReport = new Map<string, WorkItemRow[]>();
+  for (const item of itemRows) {
+    const list = itemsByReport.get(item.report_id);
+    if (list) {
+      list.push(item);
+    } else {
+      itemsByReport.set(item.report_id, [item]);
+    }
+  }
 
   const bundles: ReportBundle[] = [];
-  for (const row of reportRows) {
-    const bundle = await getReportBundle(row.id);
-    if (bundle) {
-      bundles.push(bundle);
+  for (const reportRow of reportRows) {
+    const propertyRow = propertyMap.get(reportRow.property_id);
+    if (!propertyRow) {
+      continue;
     }
+    bundles.push({
+      property: mapProperty(propertyRow),
+      report: mapReport(reportRow),
+      workItems: (itemsByReport.get(reportRow.id) ?? []).map(mapWorkItem),
+    });
   }
   return bundles;
 }
@@ -2166,20 +2223,43 @@ export async function saveReport(report: ServiceReport, workItems: WorkItem[]): 
 
 export async function completeReport(report: ServiceReport, workItems: WorkItem[]): Promise<void> {
   if (isWeb) {
+    // Single read → mutate → write (no double round-trip)
+    const store = await readWebStore();
     const timestamp = nowIso();
-    await saveReport({ ...report, status: 'completed' }, workItems);
-    const updatedStore = await readWebStore();
-    updatedStore.reports = updatedStore.reports.map((existing) =>
+    store.reports = store.reports.map((existing) =>
       existing.id === report.id
         ? {
             ...existing,
+            cleaningDate: compact(report.cleaningDate),
+            timeFrom: compact(report.timeFrom),
+            timeTo: compact(report.timeTo),
+            chimneySweepName: compact(report.chimneySweepName),
+            notes: compact(report.notes),
             status: 'completed',
             completedAt: existing.completedAt ?? timestamp,
             updatedAt: timestamp,
           }
         : existing,
     );
-    await writeWebStore(updatedStore);
+    store.workItems = [
+      ...store.workItems.filter((item) => item.reportId !== report.id),
+      ...workItems
+        .filter((item) =>
+          [item.quantity, item.description, item.tp, item.amount, item.minutes].some((value) => compact(value)),
+        )
+        .map((item, index) => ({
+          ...item,
+          id: item.id || createId('item'),
+          reportId: report.id,
+          quantity: compact(item.quantity),
+          description: compact(item.description),
+          tp: compact(item.tp),
+          amount: compact(item.amount),
+          minutes: compact(item.minutes),
+          sortOrder: index,
+        })),
+    ];
+    await writeWebStore(store);
     return;
   }
 
@@ -2188,17 +2268,64 @@ export async function completeReport(report: ServiceReport, workItems: WorkItem[
     throw new Error('Datenbank nicht verfuegbar.');
   }
   const timestamp = nowIso();
-  await saveReport({ ...report, status: 'completed' }, workItems);
-  await db.runAsync(
-    `
-      UPDATE service_reports
-      SET status = 'completed', completed_at = COALESCE(completed_at, ?), updated_at = ?
-      WHERE id = ?
-    `,
-    timestamp,
-    timestamp,
-    report.id,
-  );
+
+  // Single atomic transaction: report fields + completed_at + work items
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `
+        UPDATE service_reports SET
+          cleaning_date = ?,
+          time_from = ?,
+          time_to = ?,
+          chimney_sweep_name = ?,
+          notes = ?,
+          status = 'completed',
+          completed_at = COALESCE(completed_at, ?),
+          updated_at = ?
+        WHERE id = ?
+      `,
+      compact(report.cleaningDate),
+      compact(report.timeFrom),
+      compact(report.timeTo),
+      compact(report.chimneySweepName),
+      compact(report.notes),
+      timestamp,
+      timestamp,
+      report.id,
+    );
+
+    await db.runAsync('DELETE FROM work_items WHERE report_id = ?', report.id);
+
+    for (const [index, item] of workItems.entries()) {
+      const hasContent = [
+        item.quantity,
+        item.description,
+        item.tp,
+        item.amount,
+        item.minutes,
+      ].some((value) => compact(value));
+
+      if (!hasContent) {
+        continue;
+      }
+
+      await db.runAsync(
+        `
+          INSERT INTO work_items (
+            id, report_id, quantity, description, tp, amount, minutes, sort_order
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        item.id || createId('item'),
+        report.id,
+        compact(item.quantity),
+        compact(item.description),
+        compact(item.tp),
+        compact(item.amount),
+        compact(item.minutes),
+        index,
+      );
+    }
+  });
 }
 
 export async function markReportExported(reportId: string): Promise<void> {

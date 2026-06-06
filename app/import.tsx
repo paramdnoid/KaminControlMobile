@@ -24,7 +24,7 @@ export default function ImportScreen() {
   const [genesisLoading, setGenesisLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [genesisSaving, setGenesisSaving] = useState(false);
-  const objectTariffSuggestionCount = genesisPreview?.bundle.plannedWork.filter((item) => item.source === 'objectTariff' || item.source === 'tariff').length ?? 0;
+  const objectTariffSuggestionCount = genesisPreview?.bundle.plannedWork.filter((item) => item.source === 'objectTariff').length ?? 0;
   const invoiceLineSuggestionCount = genesisPreview?.bundle.plannedWork.filter((item) => item.source === 'invoiceLine').length ?? 0;
   const arbvolCount = genesisPreview?.bundle.plannedWork.filter((item) => item.source === 'arbvol').length ?? 0;
 
