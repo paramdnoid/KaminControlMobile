@@ -115,6 +115,8 @@ type GenesisPlannedWorkRow = {
   property_id: string;
   source_key: string;
   work_key: string;
+  source: string;
+  tariff_code: string;
   month: string;
   tour: string;
   quantity: string;
@@ -122,6 +124,10 @@ type GenesisPlannedWorkRow = {
   tp: string;
   amount: string;
   minutes: string;
+  unit_price: string;
+  tax_points: string;
+  confidence: number;
+  reason: string;
   notes: string;
 };
 
@@ -272,6 +278,8 @@ export async function initDatabase(): Promise<SQLiteDatabase | null> {
           property_id TEXT NOT NULL,
           source_key TEXT NOT NULL,
           work_key TEXT NOT NULL DEFAULT '',
+          source TEXT NOT NULL DEFAULT 'arbvol',
+          tariff_code TEXT NOT NULL DEFAULT '',
           month TEXT NOT NULL DEFAULT '',
           tour TEXT NOT NULL DEFAULT '',
           quantity TEXT NOT NULL DEFAULT '',
@@ -279,6 +287,10 @@ export async function initDatabase(): Promise<SQLiteDatabase | null> {
           tp TEXT NOT NULL DEFAULT '',
           amount TEXT NOT NULL DEFAULT '',
           minutes TEXT NOT NULL DEFAULT '',
+          unit_price TEXT NOT NULL DEFAULT '',
+          tax_points TEXT NOT NULL DEFAULT '',
+          confidence INTEGER NOT NULL DEFAULT 0,
+          reason TEXT NOT NULL DEFAULT '',
           notes TEXT NOT NULL DEFAULT '',
           raw_json TEXT NOT NULL DEFAULT '{}',
           updated_at TEXT NOT NULL,
@@ -310,6 +322,12 @@ export async function initDatabase(): Promise<SQLiteDatabase | null> {
       await ensureColumn(db, 'customer_properties', 'source_system', "TEXT NOT NULL DEFAULT 'manual'");
       await ensureColumn(db, 'customer_properties', 'is_active', 'INTEGER NOT NULL DEFAULT 1');
       await ensureColumn(db, 'customer_properties', 'last_imported_at', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn(db, 'genesis_planned_work', 'source', "TEXT NOT NULL DEFAULT 'arbvol'");
+      await ensureColumn(db, 'genesis_planned_work', 'tariff_code', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn(db, 'genesis_planned_work', 'unit_price', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn(db, 'genesis_planned_work', 'tax_points', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn(db, 'genesis_planned_work', 'confidence', 'INTEGER NOT NULL DEFAULT 0');
+      await ensureColumn(db, 'genesis_planned_work', 'reason', "TEXT NOT NULL DEFAULT ''");
 
       return db;
     });
@@ -502,6 +520,8 @@ function mapGenesisPlannedWork(row: GenesisPlannedWorkRow): GenesisPlannedWork {
     propertyId: row.property_id,
     sourceKey: row.source_key,
     workKey: row.work_key,
+    source: row.source === 'tariff' || row.source === 'history' ? row.source : 'arbvol',
+    tariffCode: row.tariff_code,
     month: row.month as GenesisPlannedWork['month'],
     tour: row.tour,
     quantity: row.quantity,
@@ -509,7 +529,34 @@ function mapGenesisPlannedWork(row: GenesisPlannedWorkRow): GenesisPlannedWork {
     tp: row.tp,
     amount: row.amount,
     minutes: row.minutes,
+    unitPrice: row.unit_price,
+    taxPoints: row.tax_points,
+    confidence: row.confidence,
+    reason: row.reason,
     notes: row.notes,
+  };
+}
+
+function normalizePlannedWorkItem(
+  item: Partial<GenesisPlannedWork> & { sourceKey: string; workKey: string },
+): Omit<GenesisPlannedWork, 'id' | 'propertyId'> {
+  return {
+    sourceKey: compact(item.sourceKey),
+    workKey: compact(item.workKey),
+    source: item.source === 'tariff' || item.source === 'history' ? item.source : 'arbvol',
+    tariffCode: compact(item.tariffCode ?? ''),
+    month: item.month ?? '',
+    tour: compact(item.tour ?? ''),
+    quantity: compact(item.quantity ?? ''),
+    description: compact(item.description ?? ''),
+    tp: compact(item.tp ?? ''),
+    amount: compact(item.amount ?? ''),
+    minutes: compact(item.minutes ?? ''),
+    unitPrice: compact(item.unitPrice ?? ''),
+    taxPoints: compact(item.taxPoints ?? ''),
+    confidence: Number.isFinite(item.confidence) ? Number(item.confidence) : 0,
+    reason: compact(item.reason ?? ''),
+    notes: compact(item.notes ?? ''),
   };
 }
 
@@ -1057,7 +1104,7 @@ export async function importGenesisBundle(
       if (!propertyId) {
         continue;
       }
-      store.genesisPlannedWork.push({ ...item, id: createId('plan'), propertyId });
+      store.genesisPlannedWork.push({ ...normalizePlannedWorkItem(item), id: createId('plan'), propertyId });
       result.plannedWork += 1;
     }
 
@@ -1183,25 +1230,33 @@ export async function importGenesisBundle(
       if (!propertyId) {
         continue;
       }
+      const plannedItem = normalizePlannedWorkItem(item);
       await db.runAsync(
         `
           INSERT INTO genesis_planned_work (
-            id, property_id, source_key, work_key, month, tour, quantity, description, tp,
-            amount, minutes, notes, raw_json, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            id, property_id, source_key, work_key, source, tariff_code, month, tour, quantity,
+            description, tp, amount, minutes, unit_price, tax_points, confidence, reason,
+            notes, raw_json, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         createId('plan'),
         propertyId,
-        compact(item.sourceKey),
-        compact(item.workKey),
-        compact(item.month),
-        compact(item.tour),
-        compact(item.quantity),
-        compact(item.description),
-        compact(item.tp),
-        compact(item.amount),
-        compact(item.minutes),
-        compact(item.notes),
+        plannedItem.sourceKey,
+        plannedItem.workKey,
+        plannedItem.source,
+        plannedItem.tariffCode,
+        compact(plannedItem.month),
+        plannedItem.tour,
+        plannedItem.quantity,
+        plannedItem.description,
+        plannedItem.tp,
+        plannedItem.amount,
+        plannedItem.minutes,
+        plannedItem.unitPrice,
+        plannedItem.taxPoints,
+        plannedItem.confidence,
+        plannedItem.reason,
+        plannedItem.notes,
         JSON.stringify(item.raw ?? {}),
         timestamp,
       );
@@ -1282,10 +1337,15 @@ export async function listGenesisImportRuns(limit = 5): Promise<GenesisImportRun
 export async function getGenesisContext(propertyId: string): Promise<GenesisPropertyContext> {
   if (isWeb) {
     const store = readWebStore();
+    const plannedWork = store.genesisPlannedWork
+      .filter((item) => item.propertyId === propertyId)
+      .map((item) => ({ ...normalizePlannedWorkItem(item), id: item.id, propertyId: item.propertyId }));
     return {
       importRun: store.genesisImportRuns[0] ?? null,
       installations: store.genesisInstallations.filter((item) => item.propertyId === propertyId),
-      plannedWork: store.genesisPlannedWork.filter((item) => item.propertyId === propertyId),
+      tariffSuggestions: plannedWork.filter((item) => item.source === 'tariff'),
+      arbvolSummary: plannedWork.filter((item) => item.source === 'arbvol'),
+      plannedWork,
       history: store.genesisHistory
         .filter((item) => item.propertyId === propertyId)
         .sort((a, b) => b.date.localeCompare(a.date))
@@ -1313,10 +1373,14 @@ export async function getGenesisContext(propertyId: string): Promise<GenesisProp
     ),
   ]);
 
+  const plannedWork = plannedRows.map(mapGenesisPlannedWork);
+
   return {
     importRun: runRow ? mapGenesisImportRun(runRow) : null,
     installations: installationRows.map(mapGenesisInstallation),
-    plannedWork: plannedRows.map(mapGenesisPlannedWork),
+    tariffSuggestions: plannedWork.filter((item) => item.source === 'tariff'),
+    arbvolSummary: plannedWork.filter((item) => item.source === 'arbvol'),
+    plannedWork,
     history: historyRows.map(mapGenesisHistory),
   };
 }

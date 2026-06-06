@@ -137,7 +137,8 @@ export default function PropertyDetailScreen() {
           />
           <Card>
             <Info label="Anlagen" value={`${genesisContext.installations.length}`} />
-            <Info label="Geplante Arbeiten" value={`${genesisContext.plannedWork.length}`} />
+            <Info label="Tarifvorschläge" value={`${genesisContext.tariffSuggestions.length}`} />
+            <Info label="Arbeitsvolumen" value={`${genesisContext.arbvolSummary.length}`} />
             <Info label="Historie" value={`${genesisContext.history.length}`} />
           </Card>
 
@@ -162,15 +163,34 @@ export default function PropertyDetailScreen() {
             </>
           ) : null}
 
-          {genesisContext.plannedWork.length ? (
+          {genesisContext.tariffSuggestions.length ? (
             <>
-              <SectionHeader title="Geplante Arbeiten" />
+              <SectionHeader title="Tarifvorschläge" />
               <View style={styles.list}>
-                {genesisContext.plannedWork.map((work) => (
+                {genesisContext.tariffSuggestions.slice(0, 8).map((work) => (
                   <Card key={work.id} compact>
                     <Text style={styles.itemTitle}>{work.description || work.tp || 'Geplante Arbeit'}</Text>
                     <Text style={styles.meta}>
-                      {[work.quantity && `Anzahl ${work.quantity}`, work.minutes && `${work.minutes} Min.`, work.month, work.tour && `Tour ${work.tour}`]
+                      {[work.tariffCode, work.quantity && `Anzahl ${work.quantity}`, work.tp && `${work.tp} TP`, work.amount && `CHF ${work.amount}`]
+                        .filter(Boolean)
+                        .join(' · ') || '-'}
+                    </Text>
+                    <Text style={styles.text}>{work.reason || work.notes || '-'}</Text>
+                  </Card>
+                ))}
+              </View>
+            </>
+          ) : null}
+
+          {genesisContext.arbvolSummary.length ? (
+            <>
+              <SectionHeader title="Arbeitsvolumen" />
+              <View style={styles.list}>
+                {genesisContext.arbvolSummary.map((work) => (
+                  <Card key={work.id} compact>
+                    <Text style={styles.itemTitle}>{work.description || 'Arbeitsvolumen'}</Text>
+                    <Text style={styles.meta}>
+                      {[work.month, work.tour && `Tour ${work.tour}`, work.minutes && `${work.minutes} Min.`]
                         .filter(Boolean)
                         .join(' · ') || '-'}
                     </Text>

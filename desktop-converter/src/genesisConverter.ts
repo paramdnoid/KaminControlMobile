@@ -135,6 +135,22 @@ function normalizeDate(value: unknown): string {
   return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
 }
 
+function parseAmount(value: unknown): number {
+  const parsed = Number(clean(value).replace("'", '').replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatDecimal(value: number, decimals = 2): string {
+  if (!Number.isFinite(value) || value === 0) {
+    return '';
+  }
+  return value.toFixed(decimals).replace(/\.?0+$/, '');
+}
+
+function formatQuantity(value: unknown): string {
+  return formatDecimal(parseAmount(value), 4);
+}
+
 function buildingTypeFrom(value: unknown): { buildingType: BuildingType | ''; otherBuildingType: string } {
   const text = clean(value);
   const lookup = text.toLowerCase();
@@ -364,6 +380,8 @@ export function mapPlannedWork(row: Row, rowIndex: number): GenesisBundlePlanned
   return {
     sourceKey,
     workKey: `${sourceKey}-ARBVOL-${clean(row.MonatNr) || '0'}-${rowIndex + 1}`,
+    source: 'arbvol',
+    tariffCode: '',
     month,
     tour: clean(row.AVTour),
     quantity: '',
@@ -371,11 +389,86 @@ export function mapPlannedWork(row: Row, rowIndex: number): GenesisBundlePlanned
     tp: '',
     amount: '',
     minutes: clean(row.AVMin),
+    unitPrice: '',
+    taxPoints: '',
+    confidence: info ? 60 : 35,
+    reason: 'Arbeitsvolumen aus ARBVOL',
     notes: joinLines([
       clean(row.AVBem1),
       clean(row.AVBem2),
       clean(row.AVLeArch) ? `Letzte Archivierung: ${clean(row.AVLeArch)}` : '',
     ]),
+    raw: row,
+  };
+}
+
+function isTechnicalTariffLine(code: string): boolean {
+  const normalized = code.toLowerCase();
+  return (
+    !normalized ||
+    normalized === '00+00' ||
+    normalized === 'tvz' ||
+    /^av\d*$/.test(normalized)
+  );
+}
+
+function shouldKeepTariffLine(row: Row, code: string, description: string): boolean {
+  if (isTechnicalTariffLine(code)) {
+    return false;
+  }
+  if (code.toLowerCase() === 'ft') {
+    return Boolean(description);
+  }
+  return Boolean(description || parseAmount(row.TAnz) || parseAmount(row.TPreis));
+}
+
+export function mapTariffSuggestion(
+  row: Row,
+  tariffCatalog: Map<string, Row>,
+  rowIndex: number,
+): GenesisBundlePlannedWork | null {
+  if (!Number(row.TKuG) || !clean(row.TKuH)) {
+    return null;
+  }
+
+  const sourceKey = buildSourceKey(row.TKuG, row.TKuS, row.TKuH, row.TKuZ);
+  const tariffCode = clean(row.TTarif);
+  const catalogEntry = tariffCatalog.get(tariffCode.toLowerCase());
+  const catalogText = clean(catalogEntry?.TLang);
+  const ownText = clean(row.TTBez);
+  const notes = clean(row.TTBem);
+  const description = ownText || catalogText || notes;
+
+  if (!shouldKeepTariffLine(row, tariffCode, description)) {
+    return null;
+  }
+
+  const quantityValue = parseAmount(row.TAnz);
+  const quantity = quantityValue > 0 ? formatQuantity(row.TAnz) : '';
+  const unitPriceValue = parseAmount(catalogEntry?.TPreis);
+  const ownPriceValue = parseAmount(row.TPreis);
+  const taxPointValue = parseAmount(catalogEntry?.TTax);
+  const computedTaxPoints = taxPointValue && quantityValue ? taxPointValue * quantityValue : taxPointValue;
+  const computedAmount = ownPriceValue || (unitPriceValue && quantityValue ? unitPriceValue * quantityValue : unitPriceValue);
+  const isMinuteTariff = /minute/i.test(catalogText) || tariffCode === '60+01';
+
+  return {
+    sourceKey,
+    workKey: `${sourceKey}-GTARIF-${clean(row.TPos) || rowIndex + 1}-${tariffCode || 'frei'}`,
+    source: 'tariff',
+    tariffCode,
+    month: '',
+    tour: '',
+    quantity,
+    description,
+    tp: formatDecimal(computedTaxPoints, 2),
+    amount: formatDecimal(computedAmount, 2),
+    minutes: isMinuteTariff && quantity ? quantity : '',
+    unitPrice: formatDecimal(unitPriceValue, 2),
+    taxPoints: formatDecimal(taxPointValue, 2),
+    confidence: ownText ? 92 : catalogText ? 84 : 68,
+    reason: ownText ? 'Objekttarif mit objektspezifischer Bezeichnung' : 'Tarifkatalog-Bezeichnung aus Genesis',
+    notes,
     raw: row,
   };
 }
@@ -512,6 +605,10 @@ export async function convertGenesisZip(zipPath: string): Promise<ConverterResul
   const properties = (kfdTables.GebStamm ?? []).map((row, index) => mapKfdProperty(row, index, helpers));
   const propertySourceKeys = new Set(properties.map((property) => property.sourceKey));
   const plannedWork = arbvolRows.map(mapPlannedWork);
+  const tariffCatalog = new Map((kfdTables.Tarife ?? []).map((row) => [clean(row.TKurz).toLowerCase(), row]));
+  const tariffSuggestions = (kfdTables.GTarife ?? [])
+    .map((row, index) => mapTariffSuggestion(row, tariffCatalog, index))
+    .filter((item): item is GenesisBundlePlannedWork => Boolean(item));
   const history = (kfdTables.Archiv ?? []).map(mapHistory);
 
   for (const sourceKey of installationSourceKeys) {
@@ -537,7 +634,7 @@ export async function convertGenesisZip(zipPath: string): Promise<ConverterResul
       },
       properties,
       installations,
-      plannedWork,
+      plannedWork: [...tariffSuggestions, ...plannedWork],
       history,
     },
     audit: {

@@ -7,7 +7,8 @@ import {
   mapInstallation,
   mapKfdProperty,
   mapPlannedWork,
-} from '../src/genesisConverter';
+  mapTariffSuggestion,
+} from '../src/genesisConverter.ts';
 
 const emptyHelpers = {
   functionsByKfdId: new Map(),
@@ -94,6 +95,47 @@ const planned = mapPlannedWork({
 assert.equal(planned.month, 'Jan');
 assert.equal(planned.minutes, '90');
 assert.equal(planned.description, 'Ka+Of');
+assert.equal(planned.source, 'arbvol');
+
+const tariff = mapTariffSuggestion({
+  TKuG: 11,
+  TKuS: 3,
+  TKuH: '0196   ',
+  TKuZ: 0,
+  TPos: 5,
+  TAnz: '2.0000',
+  TTarif: '40+12',
+  TTBez: '',
+  TTBem: '',
+  TPreis: '0.0000',
+}, new Map([
+  ['40+12', {
+    TKurz: '40+12',
+    TLang: 'Kamin bis 9m',
+    TPreis: '17.4000',
+    TTax: '12.0000',
+  }],
+]), 0);
+assert.ok(tariff);
+assert.equal(tariff.source, 'tariff');
+assert.equal(tariff.description, 'Kamin bis 9m');
+assert.equal(tariff.quantity, '2');
+assert.equal(tariff.tp, '24');
+assert.equal(tariff.amount, '34.8');
+
+const technical = mapTariffSuggestion({
+  TKuG: 11,
+  TKuS: 3,
+  TKuH: '0196   ',
+  TKuZ: 0,
+  TPos: 1,
+  TAnz: '0.0000',
+  TTarif: 'AV1',
+  TTBez: '0   1',
+  TTBem: 'Ka+Of',
+  TPreis: '0.0000',
+}, new Map(), 0);
+assert.equal(technical, null);
 
 const history = mapHistory({
   ARKuG: 11,

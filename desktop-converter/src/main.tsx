@@ -59,6 +59,8 @@ function App() {
   }
 
   const warningCount = result?.bundle.metadata.warnings.length ?? 0;
+  const tariffSuggestionCount = result?.bundle.plannedWork.filter((item) => item.source === 'tariff').length ?? 0;
+  const arbvolCount = result?.bundle.plannedWork.filter((item) => item.source === 'arbvol').length ?? 0;
 
   return (
     <main className="shell">
@@ -113,7 +115,8 @@ function App() {
           <section className="metrics">
             <Metric label="Liegenschaften" value={result.bundle.properties.length} />
             <Metric label="Anlagen" value={result.bundle.installations.length} />
-            <Metric label="Geplante Arbeiten" value={result.bundle.plannedWork.length} />
+            <Metric label="Tarifvorschläge" value={tariffSuggestionCount} />
+            <Metric label="Arbeitsvolumen" value={arbvolCount} />
             <Metric label="Historie" value={result.bundle.history.length} />
             <Metric label="Warnungen" value={warningCount} tone={warningCount ? 'warn' : 'ok'} />
           </section>

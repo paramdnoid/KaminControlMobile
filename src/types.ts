@@ -139,11 +139,15 @@ export type GenesisInstallation = {
   notes: string;
 };
 
+export type GenesisSuggestionSource = 'tariff' | 'arbvol' | 'history';
+
 export type GenesisPlannedWork = {
   id: string;
   propertyId: string;
   sourceKey: string;
   workKey: string;
+  source: GenesisSuggestionSource;
+  tariffCode: string;
   month: CleaningMonth | '';
   tour: string;
   quantity: string;
@@ -151,6 +155,10 @@ export type GenesisPlannedWork = {
   tp: string;
   amount: string;
   minutes: string;
+  unitPrice: string;
+  taxPoints: string;
+  confidence: number;
+  reason: string;
   notes: string;
 };
 
@@ -170,6 +178,8 @@ export type GenesisHistoryEntry = {
 export type GenesisPropertyContext = {
   importRun: GenesisImportRun | null;
   installations: GenesisInstallation[];
+  tariffSuggestions: GenesisPlannedWork[];
+  arbvolSummary: GenesisPlannedWork[];
   plannedWork: GenesisPlannedWork[];
   history: GenesisHistoryEntry[];
 };

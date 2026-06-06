@@ -24,6 +24,8 @@ export default function ImportScreen() {
   const [genesisLoading, setGenesisLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [genesisSaving, setGenesisSaving] = useState(false);
+  const tariffSuggestionCount = genesisPreview?.bundle.plannedWork.filter((item) => item.source === 'tariff').length ?? 0;
+  const arbvolCount = genesisPreview?.bundle.plannedWork.filter((item) => item.source === 'arbvol').length ?? 0;
 
   async function pickFile() {
     setLoading(true);
@@ -191,7 +193,8 @@ export default function ImportScreen() {
             <View style={styles.resultGrid}>
               <Metric label="Datei" value={genesisPreview.fileName} />
               <Metric label="Anlagen" value={`${genesisPreview.bundle.installations.length}`} />
-              <Metric label="Geplante Arbeit" value={`${genesisPreview.bundle.plannedWork.length}`} />
+              <Metric label="Tarifvorschläge" value={`${tariffSuggestionCount}`} />
+              <Metric label="Arbeitsvolumen" value={`${arbvolCount}`} />
               <Metric label="Historie" value={`${genesisPreview.bundle.history.length}`} />
             </View>
             <View style={styles.tableCounts}>
@@ -242,7 +245,7 @@ export default function ImportScreen() {
             <Metric label="Aktualisiert" value={`${genesisResult.updated}`} />
             <Metric label="Inaktiv" value={`${genesisResult.inactive}`} />
             <Metric label="Anlagen" value={`${genesisResult.installations}`} />
-            <Metric label="Geplante Arbeit" value={`${genesisResult.plannedWork}`} />
+            <Metric label="Vorschläge" value={`${genesisResult.plannedWork}`} />
             <Metric label="Historie" value={`${genesisResult.history}`} />
           </View>
           <Button label="Zur Suche" onPress={() => router.replace('/')} variant="secondary" />
