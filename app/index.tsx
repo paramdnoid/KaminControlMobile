@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 import { FileSpreadsheet, ListChecks, Search } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 
@@ -8,7 +8,7 @@ import { Card } from '../src/components/Card';
 import { PropertyCard } from '../src/components/PropertyCard';
 import { Screen } from '../src/components/Screen';
 import { createReport, getDashboardStats, listProperties } from '../src/data/database';
-import { colors, radius, spacing, typography } from '../src/theme/theme';
+import { colors, shadow } from '../src/theme/theme';
 import type { CustomerProperty, DashboardStats } from '../src/types';
 
 export default function HomeScreen() {
@@ -30,9 +30,7 @@ export default function HomeScreen() {
   }, [query]);
 
   useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
+    useCallback(() => { load(); }, [load]),
   );
 
   const subtitle = useMemo(() => {
@@ -54,8 +52,9 @@ export default function HomeScreen() {
 
   return (
     <Screen title="KaminControl" subtitle={subtitle}>
-      <View style={styles.actions}>
-        <View style={styles.actionButton}>
+      {/* Primary actions */}
+      <View className="flex-row flex-wrap gap-2">
+        <View className="flex-1 min-w-[140px]">
           <Button
             label="Stammdaten importieren"
             icon={FileSpreadsheet}
@@ -63,7 +62,7 @@ export default function HomeScreen() {
             variant="primary"
           />
         </View>
-        <View style={styles.actionButton}>
+        <View className="flex-1 min-w-[140px]">
           <Button
             label="Rapporte"
             icon={ListChecks}
@@ -73,36 +72,49 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <View style={styles.statsGrid}>
-        <Stat label="Genesis-Importe" value={stats?.genesisImports ?? 0} />
-        <Stat label="Entwürfe" value={stats?.drafts ?? 0} />
-        <Stat label="Abgeschlossen" value={stats?.completed ?? 0} />
-        <Stat label="Exportiert" value={stats?.exported ?? 0} />
+      {/* Stats — guaranteed 2×2 grid */}
+      <View className="gap-2">
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <Stat label="Genesis-Importe" value={stats?.genesisImports ?? 0} />
+          </View>
+          <View className="flex-1">
+            <Stat label="Entwürfe" value={stats?.drafts ?? 0} />
+          </View>
+        </View>
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <Stat label="Abgeschlossen" value={stats?.completed ?? 0} />
+          </View>
+          <View className="flex-1">
+            <Stat label="Exportiert" value={stats?.exported ?? 0} />
+          </View>
+        </View>
       </View>
 
-      <Card compact>
-        <View style={styles.searchBox}>
-          <Search color={colors.muted} size={20} />
-          <TextInput
-            accessibilityLabel="Liegenschaften suchen"
-            onChangeText={(value) => {
-              setQuery(value);
-              load(value);
-            }}
-            placeholder="Kundennummer, Ort, Strasse, Name"
-            placeholderTextColor={colors.muted}
-            style={styles.searchInput}
-            value={query}
-          />
-        </View>
-      </Card>
+      {/* Search bar */}
+      <View
+        className="flex-row items-center gap-2 bg-surface rounded-md border border-border min-h-[48px] px-3"
+        style={shadow.card}
+      >
+        <Search color={colors.mutedLight} size={18} strokeWidth={2} />
+        <TextInput
+          accessibilityLabel="Liegenschaften suchen"
+          onChangeText={(value) => { setQuery(value); load(value); }}
+          placeholder="Kundennummer, Ort, Strasse, Name"
+          placeholderTextColor={colors.mutedLight}
+          className="flex-1 text-base text-ink min-h-[48px]"
+          value={query}
+        />
+      </View>
 
+      {/* Property list */}
       {loading ? (
-        <View style={styles.loadingWrap}>
+        <View className="items-center py-6">
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : properties.length ? (
-        <View style={styles.list}>
+        <View className="gap-2">
           {properties.map((property) => (
             <PropertyCard
               key={property.id}
@@ -111,12 +123,14 @@ export default function HomeScreen() {
               onOpen={() => router.push({ pathname: '/property/[id]', params: { id: property.id } })}
             />
           ))}
-          {creatingFor ? <Text style={styles.saving}>Rapport wird angelegt...</Text> : null}
+          {creatingFor ? (
+            <Text className="text-small text-muted text-center">Rapport wird angelegt…</Text>
+          ) : null}
         </View>
       ) : (
         <Card>
-          <Text style={styles.emptyTitle}>Keine Liegenschaften gefunden</Text>
-          <Text style={styles.emptyText}>
+          <Text className="text-h3 font-bold text-ink">Keine Liegenschaften gefunden</Text>
+          <Text className="text-base text-muted leading-6">
             Importiere eine CSV/XLSX-Datei oder ein Genesis-Bundle mit Kundennummer und Liegenschaftsadresse.
           </Text>
           <Button
@@ -134,74 +148,12 @@ export default function HomeScreen() {
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <Card compact>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text className="text-display font-extrabold text-primary text-center tracking-tighter leading-9">
+        {value}
+      </Text>
+      <Text className="text-small font-medium text-muted text-center leading-[18px]">
+        {label}
+      </Text>
     </Card>
   );
 }
-
-const styles = StyleSheet.create({
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  actionButton: {
-    flex: 1,
-    minWidth: 140,
-  },
-  loadingWrap: {
-    paddingVertical: spacing.lg,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  statValue: {
-    color: colors.text,
-    fontSize: 24,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
-  statLabel: {
-    color: colors.muted,
-    fontSize: typography.small,
-    textAlign: 'center',
-  },
-  searchBox: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    minHeight: 48,
-    paddingHorizontal: spacing.md,
-  },
-  searchInput: {
-    color: colors.text,
-    flex: 1,
-    fontSize: typography.body,
-    minHeight: 48,
-  },
-  list: {
-    gap: spacing.md,
-  },
-  saving: {
-    color: colors.muted,
-    fontSize: typography.small,
-    textAlign: 'center',
-  },
-  emptyTitle: {
-    color: colors.text,
-    fontSize: typography.h3,
-    fontWeight: '800',
-  },
-  emptyText: {
-    color: colors.muted,
-    fontSize: typography.body,
-    lineHeight: 23,
-  },
-});

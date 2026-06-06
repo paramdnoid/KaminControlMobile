@@ -1,86 +1,80 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 
-import { colors, spacing, typography } from '../theme/theme';
+import { colors, shadow } from '../theme/theme';
 import type { ReportBundle } from '../types';
 import { formatDate } from '../utils/date';
 import { joinAddress } from '../utils/text';
-import { Card } from './Card';
 
 type Props = {
   bundle: ReportBundle;
   onOpen: () => void;
 };
 
-const statusLabel = {
-  draft: 'Entwurf',
-  completed: 'Abgeschlossen',
-  exported: 'Exportiert',
+type StatusConfig = {
+  label: string;
+  dot: string;
+  text: string;
+  bg: string;
+};
+
+const STATUS: Record<string, StatusConfig> = {
+  draft: {
+    label: 'Entwurf',
+    dot:   colors.accent,
+    text:  'text-warning',
+    bg:    'bg-accent-soft',
+  },
+  completed: {
+    label: 'Abgeschlossen',
+    dot:   colors.info,
+    text:  'text-info',
+    bg:    'bg-info-soft',
+  },
+  exported: {
+    label: 'Exportiert',
+    dot:   colors.success,
+    text:  'text-success',
+    bg:    'bg-primary-soft',
+  },
 };
 
 export function ReportCard({ bundle, onOpen }: Props) {
   const { property, report, workItems } = bundle;
+  const s = STATUS[report.status] ?? STATUS.draft;
 
   return (
-    <Card compact>
-      <Pressable accessibilityRole="button" onPress={onOpen} style={styles.wrap}>
-        <View style={styles.main}>
-          <Text style={styles.title}>{property.propertyLabel || property.street || 'Rapport'}</Text>
-          <Text style={styles.meta}>{joinAddress(property.street, property.postalCode, property.city)}</Text>
-          <Text style={styles.meta}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={onOpen}
+      className="bg-surface rounded-md border border-border p-3"
+      style={({ pressed }) => [shadow.card, pressed ? { opacity: 0.75 } : undefined]}
+    >
+      <View className="flex-row items-center gap-3">
+        <View className="flex-1 gap-0.5">
+          <Text className="text-base font-bold text-ink leading-[22px]" numberOfLines={1}>
+            {property.propertyLabel || property.street || 'Rapport'}
+          </Text>
+          <Text className="text-small text-muted leading-[18px]" numberOfLines={1}>
+            {joinAddress(property.street, property.postalCode, property.city)}
+          </Text>
+          <Text className="text-small text-muted leading-[18px]">
             {formatDate(report.cleaningDate)} · {workItems.length} Positionen
           </Text>
         </View>
-        <View style={styles.side}>
-          <Text style={[styles.status, styles[report.status]]}>{statusLabel[report.status]}</Text>
-          <ChevronRight color={colors.muted} size={20} />
+
+        <View className="items-end gap-2">
+          {/* Status badge with dot */}
+          <View className={`flex-row items-center gap-1 rounded-full px-2 py-1 ${s.bg}`}>
+            <View
+              className="rounded-full w-1.5 h-1.5"
+              style={{ backgroundColor: s.dot }}
+            />
+            <Text className={`text-small font-semibold ${s.text}`}>{s.label}</Text>
+          </View>
+          <ChevronRight color={colors.mutedLight} size={18} strokeWidth={2} />
         </View>
-      </Pressable>
-    </Card>
+      </View>
+    </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  main: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  title: {
-    color: colors.text,
-    fontSize: typography.h3,
-    fontWeight: '800',
-  },
-  meta: {
-    color: colors.muted,
-    fontSize: typography.small,
-  },
-  side: {
-    alignItems: 'flex-end',
-    gap: spacing.sm,
-  },
-  status: {
-    borderRadius: 999,
-    fontSize: typography.label,
-    fontWeight: '800',
-    overflow: 'hidden',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  draft: {
-    backgroundColor: colors.accentSoft,
-    color: colors.warning,
-  },
-  completed: {
-    backgroundColor: colors.infoSoft,
-    color: colors.info,
-  },
-  exported: {
-    backgroundColor: colors.primarySoft,
-    color: colors.success,
-  },
-});

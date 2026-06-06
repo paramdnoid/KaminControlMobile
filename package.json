@@ -17,6 +17,7 @@
     "jszip": "^3.10.1",
     "lucide-react-native": "^1.17.0",
     "mdb-reader": "^3.2.0",
+    "nativewind": "^4.2.5",
     "papaparse": "^5.5.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -25,7 +26,8 @@
     "react-native-screens": "4.25.2",
     "react-native-svg": "15.15.4",
     "react-native-web": "^0.21.2",
-    "read-excel-file": "^9.0.10"
+    "read-excel-file": "^9.0.10",
+    "tailwindcss": "^3.4.19"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

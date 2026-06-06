@@ -1,43 +1,37 @@
+/**
+ * Design tokens used directly as React Native prop values.
+ * Layout/typography/spacing are handled by NativeWind (Tailwind) classes.
+ */
 export const colors = {
-  background: '#F7F5F0',
-  surface: '#FFFFFF',
-  surfaceMuted: '#ECE7DE',
-  border: '#D6CEC0',
-  text: '#221F1B',
-  muted: '#6E665E',
-  primary: '#24524A',
-  primaryPressed: '#1C403A',
-  primarySoft: '#DDEAE5',
-  accent: '#B65F2A',
-  accentSoft: '#F3DFD0',
-  success: '#2D6A4F',
-  warning: '#9A5B11',
-  danger: '#9F2D2D',
-  dangerSoft: '#F4DADA',
-  info: '#275C7D',
-  infoSoft: '#DDEAF1',
+  background:   '#F5F2EC',
+  surface:      '#FFFFFF',
+  muted:        '#6E665E',
+  mutedLight:   '#A39990',
+  primary:      '#1E4E46',
+  accent:       '#B65F2A',
+  success:      '#2D6A4F',
+  danger:       '#9F2D2D',
+  info:         '#275C7D',
 };
 
-export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  xxl: 32,
-};
-
-export const radius = {
-  sm: 6,
-  md: 8,
-  lg: 12,
-};
-
-export const typography = {
-  title: 28,
-  h2: 20,
-  h3: 17,
-  body: 16,
-  small: 13,
-  label: 12,
-};
+/**
+ * Shadow tokens — used as `style` spread alongside NativeWind className.
+ * Tailwind's shadow utilities map differently on iOS/Android; these give
+ * precise control over the card elevation feel.
+ */
+export const shadow = {
+  card: {
+    shadowColor: '#1C1917',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.07,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  elevated: {
+    shadowColor: '#1C1917',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.11,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+} as const;

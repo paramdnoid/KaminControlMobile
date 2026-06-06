@@ -1,27 +1,25 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme/theme';
+import { shadow } from '../theme/theme';
 
 type Props = {
   children: ReactNode;
   compact?: boolean;
+  elevated?: boolean;
 };
 
-export function Card({ children, compact = false }: Props) {
-  return <View style={[styles.card, compact ? styles.compact : null]}>{children}</View>;
+export function Card({ children, compact = false, elevated = false }: Props) {
+  return (
+    <View
+      className={[
+        'bg-surface rounded-md border border-border',
+        compact ? 'p-3 gap-3' : 'p-4 gap-3',
+        elevated ? 'border-0' : '',
+      ].join(' ')}
+      style={elevated ? shadow.elevated : shadow.card}
+    >
+      {children}
+    </View>
+  );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  compact: {
-    padding: spacing.md,
-  },
-});

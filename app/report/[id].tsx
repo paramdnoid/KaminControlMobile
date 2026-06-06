@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   CheckCircle2,
@@ -25,60 +25,45 @@ import {
   markReportExported,
   saveReport,
 } from '../../src/data/database';
-import {
-  buildStructuredReport,
-  shareReportPdf,
-} from '../../src/pdf/reportPdf';
-import { colors, spacing, typography } from '../../src/theme/theme';
-import type { GenesisHistoryEntry, GenesisPlannedWork, GenesisPropertyContext, ReportBundle, ServiceReport, WorkItem } from '../../src/types';
+import { buildStructuredReport, shareReportPdf } from '../../src/pdf/reportPdf';
+import { colors } from '../../src/theme/theme';
+import type {
+  GenesisHistoryEntry,
+  GenesisPlannedWork,
+  GenesisPropertyContext,
+  ReportBundle,
+  ServiceReport,
+  WorkItem,
+} from '../../src/types';
 import { createId } from '../../src/utils/id';
 import { joinAddress } from '../../src/utils/text';
 
-type FormErrors = {
-  cleaningDate?: string;
-  chimneySweepName?: string;
-};
-
+type FormErrors = { cleaningDate?: string; chimneySweepName?: string };
 type SuggestionTab = 'objectTariff' | 'invoiceLine' | 'history' | 'arbvol';
 
 function emptyWorkItem(reportId: string, sortOrder: number): WorkItem {
-  return {
-    id: createId('item'),
-    reportId,
-    quantity: '',
-    description: '',
-    tp: '',
-    amount: '',
-    minutes: '',
-    sortOrder,
-  };
+  return { id: createId('item'), reportId, quantity: '', description: '', tp: '', amount: '', minutes: '', sortOrder };
 }
 
 export default function ReportScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [bundle, setBundle] = useState<ReportBundle | null>(null);
-  const [genesisContext, setGenesisContext] = useState<GenesisPropertyContext | null>(null);
-  const [report, setReport] = useState<ServiceReport | null>(null);
-  const [workItems, setWorkItems] = useState<WorkItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [showJson, setShowJson] = useState(false);
-  const [suggestionTab, setSuggestionTab] = useState<SuggestionTab>('objectTariff');
-  const [expandedItemIds, setExpandedItemIds] = useState<string[]>([]);
-  // isDirty tracks whether the user has made changes since last load/save.
-  // Using state (not a ref) ensures the autosave effect observes the correct value
-  // even under React's concurrent scheduler.
-  const [isDirty, setIsDirty] = useState(false);
+  const [bundle, setBundle]                     = useState<ReportBundle | null>(null);
+  const [genesisContext, setGenesisContext]     = useState<GenesisPropertyContext | null>(null);
+  const [report, setReport]                     = useState<ServiceReport | null>(null);
+  const [workItems, setWorkItems]               = useState<WorkItem[]>([]);
+  const [loading, setLoading]                   = useState(true);
+  const [busy, setBusy]                         = useState(false);
+  const [savedAt, setSavedAt]                   = useState<string | null>(null);
+  const [errors, setErrors]                     = useState<FormErrors>({});
+  const [showJson, setShowJson]                 = useState(false);
+  const [suggestionTab, setSuggestionTab]       = useState<SuggestionTab>('objectTariff');
+  const [expandedItemIds, setExpandedItemIds]   = useState<string[]>([]);
+  const [isDirty, setIsDirty]                   = useState(false);
 
   const load = useCallback(async () => {
-    if (!id) {
-      return;
-    }
-
+    if (!id) return;
     setLoading(true);
-    const nextBundle = await getReportBundle(id);
+    const nextBundle        = await getReportBundle(id);
     const nextGenesisContext = nextBundle ? await getGenesisContext(nextBundle.property.id) : null;
     setBundle(nextBundle);
     setGenesisContext(nextGenesisContext);
@@ -86,237 +71,128 @@ export default function ReportScreen() {
     setWorkItems(
       nextBundle?.workItems.length
         ? nextBundle.workItems
-        : nextBundle?.report
-          ? [emptyWorkItem(nextBundle.report.id, 0)]
-          : [],
+        : nextBundle?.report ? [emptyWorkItem(nextBundle.report.id, 0)] : [],
     );
-    // Reset dirty flag after load — prevents autosave firing on re-focus with no changes
     setIsDirty(false);
     setLoading(false);
   }, [id]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   useEffect(() => {
-    if (!isDirty || !report) {
-      return undefined;
-    }
-
+    if (!isDirty || !report) return undefined;
     const timeout = setTimeout(() => {
       saveReport(report, workItems)
         .then(() => setSavedAt(new Date().toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })))
-        .catch((error) => {
-          console.warn('Autosave failed', error);
-        });
+        .catch((e) => console.warn('Autosave failed', e));
     }, 700);
-
     return () => clearTimeout(timeout);
   }, [report, workItems, isDirty]);
 
-  // ISO date string for today — used as the date field placeholder; stable per mount
   const todayPlaceholder = useMemo(() => new Date().toISOString().slice(0, 10), []);
-
-  // Compute once per render cycle; used by structuredJson, suggestion checks, and JSX meta
-  const cleanItems = useMemo(() => cleanWorkItems(workItems), [workItems]);
-
-  // Set of work item signatures for O(1) "already applied" checks across up to 16 suggestion rows
-  const cleanSignatures = useMemo(
-    () => new Set(cleanItems.map(workItemSignature)),
-    [cleanItems],
-  );
-
-  const structuredJson = useMemo(() => {
-    if (!bundle || !report) {
-      return '';
-    }
+  const cleanItems       = useMemo(() => cleanWorkItems(workItems), [workItems]);
+  const cleanSignatures  = useMemo(() => new Set(cleanItems.map(workItemSignature)), [cleanItems]);
+  const structuredJson   = useMemo(() => {
+    if (!bundle || !report) return '';
     return buildStructuredReport({ ...bundle, report, workItems: cleanItems });
   }, [bundle, report, cleanItems]);
 
   function updateReport(patch: Partial<ServiceReport>) {
     setIsDirty(true);
-    setReport((current) => (current ? { ...current, ...patch } : current));
+    setReport((c) => (c ? { ...c, ...patch } : c));
   }
-
   function updateWorkItem(index: number, patch: Partial<WorkItem>) {
     setIsDirty(true);
-    setWorkItems((current) =>
-      current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)),
-    );
+    setWorkItems((c) => c.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   }
-
   function removeWorkItem(index: number) {
     setIsDirty(true);
-    setWorkItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setWorkItems((c) => c.filter((_, i) => i !== index));
   }
-
   function addWorkItem() {
-    if (!report) {
-      return;
-    }
+    if (!report) return;
     setIsDirty(true);
     const item = emptyWorkItem(report.id, workItems.length);
-    setExpandedItemIds((current) => [...current, item.id]);
-    setWorkItems((current) => [...current, item]);
+    setExpandedItemIds((c) => [...c, item.id]);
+    setWorkItems((c) => [...c, item]);
   }
-
   function appendSuggestedItems(items: WorkItem[]) {
-    if (!items.length) {
-      return;
-    }
-
+    if (!items.length) return;
     setWorkItems((current) => {
-      const existingSignatures = new Set(cleanWorkItems(current).map(workItemSignature));
-      const newItems = items.filter((item) => !existingSignatures.has(workItemSignature(item)));
-      if (!newItems.length) {
-        return current;
-      }
-      const currentHasContent = cleanWorkItems(current).length > 0;
-      const nextItems = currentHasContent ? [...current, ...newItems] : newItems;
-      return nextItems.map((item, index) => ({ ...item, sortOrder: index }));
+      const existing = new Set(cleanWorkItems(current).map(workItemSignature));
+      const newItems = items.filter((item) => !existing.has(workItemSignature(item)));
+      if (!newItems.length) return current;
+      const hasContent = cleanWorkItems(current).length > 0;
+      return (hasContent ? [...current, ...newItems] : newItems).map((item, i) => ({ ...item, sortOrder: i }));
     });
   }
-
-  function applyTariffSuggestion(work: GenesisPlannedWork) {
-    if (!report || work.lineType === 'control') {
-      return;
-    }
-    appendSuggestedItems([workFromPlannedSuggestion(report.id, work)]);
-  }
-
+  function applyTariffSuggestion(work: GenesisPlannedWork)   { if (!report || work.lineType === 'control') return; appendSuggestedItems([workFromPlannedSuggestion(report.id, work)]); }
   function applyAllTariffs() {
-    if (!report || !genesisContext?.objectTariffSuggestions.length) {
-      return;
-    }
-    appendSuggestedItems(genesisContext.objectTariffSuggestions
-      .filter((work) => work.lineType !== 'control')
-      .map((work) => workFromPlannedSuggestion(report.id, work)));
+    if (!report || !genesisContext?.objectTariffSuggestions.length) return;
+    appendSuggestedItems(genesisContext.objectTariffSuggestions.filter((w) => w.lineType !== 'control').map((w) => workFromPlannedSuggestion(report.id, w)));
   }
+  function applyInvoiceLineSuggestion(work: GenesisPlannedWork) { if (!report || work.lineType === 'control') return; appendSuggestedItems([workFromPlannedSuggestion(report.id, work)]); }
+  function applyArbvolSuggestion(work: GenesisPlannedWork)      { if (!report) return; appendSuggestedItems([workFromPlannedSuggestion(report.id, work)]); }
+  function applyHistorySuggestion(entry: GenesisHistoryEntry)   { if (!report) return; appendSuggestedItems([workFromHistory(report.id, entry)]); }
 
-  function applyInvoiceLineSuggestion(work: GenesisPlannedWork) {
-    if (!report || work.lineType === 'control') {
-      return;
-    }
-    appendSuggestedItems([workFromPlannedSuggestion(report.id, work)]);
+  function isSuggestedWorkApplied(work: GenesisPlannedWork) { return cleanSignatures.has(workItemSignature(workFromPlannedSuggestion(report?.id ?? '', work))); }
+  function isHistoryApplied(entry: GenesisHistoryEntry)     { return cleanSignatures.has(workItemSignature(workFromHistory(report?.id ?? '', entry))); }
+
+  function toggleItem(itemId: string) {
+    setExpandedItemIds((c) => c.includes(itemId) ? c.filter((x) => x !== itemId) : [...c, itemId]);
   }
-
-  function applyArbvolSuggestion(work: GenesisPlannedWork) {
-    if (!report) {
-      return;
-    }
-    appendSuggestedItems([workFromPlannedSuggestion(report.id, work)]);
-  }
-
-  function applyHistorySuggestion(entry: GenesisHistoryEntry) {
-    if (!report) {
-      return;
-    }
-    appendSuggestedItems([workFromHistory(report.id, entry)]);
-  }
-
-  function isSuggestedWorkApplied(work: GenesisPlannedWork): boolean {
-    return cleanSignatures.has(workItemSignature(workFromPlannedSuggestion(report?.id ?? '', work)));
-  }
-
-  function isHistoryApplied(entry: GenesisHistoryEntry): boolean {
-    return cleanSignatures.has(workItemSignature(workFromHistory(report?.id ?? '', entry)));
-  }
-
-  function toggleItem(id: string) {
-    setExpandedItemIds((current) =>
-      current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id],
-    );
-  }
-
   function validate(): boolean {
-    const nextErrors: FormErrors = {};
-    if (!report?.cleaningDate) {
-      nextErrors.cleaningDate = 'Datum ist erforderlich.';
-    }
-    if (!report?.chimneySweepName.trim()) {
-      nextErrors.chimneySweepName = 'Name des Kaminfegers ist erforderlich.';
-    }
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+    const next: FormErrors = {};
+    if (!report?.cleaningDate)           next.cleaningDate    = 'Datum ist erforderlich.';
+    if (!report?.chimneySweepName.trim()) next.chimneySweepName = 'Name des Kaminfegers ist erforderlich.';
+    setErrors(next);
+    return Object.keys(next).length === 0;
   }
-
   async function finishReport() {
-    if (!report || !validate()) {
-      return;
-    }
-
+    if (!report || !validate()) return;
     setBusy(true);
-    try {
-      await completeReport(report, cleanWorkItems(workItems));
-      await load();
-    } catch (error) {
-      Alert.alert('Abschluss fehlgeschlagen', error instanceof Error ? error.message : 'Rapport konnte nicht abgeschlossen werden.');
-    } finally {
-      setBusy(false);
-    }
+    try   { await completeReport(report, cleanWorkItems(workItems)); await load(); }
+    catch (e) { Alert.alert('Abschluss fehlgeschlagen', e instanceof Error ? e.message : 'Rapport konnte nicht abgeschlossen werden.'); }
+    finally   { setBusy(false); }
   }
-
   async function sharePdf() {
-    if (!bundle || !report) {
-      return;
-    }
-
+    if (!bundle || !report) return;
     setBusy(true);
-    try {
-      await saveReport(report, cleanWorkItems(workItems));
-      await shareReportPdf({ ...bundle, report, workItems: cleanWorkItems(workItems) });
-    } catch (error) {
-      Alert.alert('PDF fehlgeschlagen', error instanceof Error ? error.message : 'PDF konnte nicht erzeugt werden.');
-    } finally {
-      setBusy(false);
-    }
+    try   { await saveReport(report, cleanWorkItems(workItems)); await shareReportPdf({ ...bundle, report, workItems: cleanWorkItems(workItems) }); }
+    catch (e) { Alert.alert('PDF fehlgeschlagen', e instanceof Error ? e.message : 'PDF konnte nicht erzeugt werden.'); }
+    finally   { setBusy(false); }
   }
-
   async function exportDone() {
-    if (!report) {
-      return;
-    }
-
+    if (!report) return;
     setBusy(true);
-    try {
-      await markReportExported(report.id);
-      await load();
-    } catch (error) {
-      Alert.alert('Status fehlgeschlagen', error instanceof Error ? error.message : 'Status konnte nicht gesetzt werden.');
-    } finally {
-      setBusy(false);
-    }
+    try   { await markReportExported(report.id); await load(); }
+    catch (e) { Alert.alert('Status fehlgeschlagen', e instanceof Error ? e.message : 'Status konnte nicht gesetzt werden.'); }
+    finally   { setBusy(false); }
   }
 
   if (loading) {
     return (
       <Screen title="Rapport">
-        <ActivityIndicator color={colors.primary} />
+        <View className="items-center py-6"><ActivityIndicator color={colors.primary} /></View>
       </Screen>
     );
   }
-
   if (!bundle || !report) {
     return (
       <Screen title="Rapport">
         <Card>
-          <Text style={styles.title}>Nicht gefunden</Text>
+          <Text className="text-h3 font-bold text-ink">Nicht gefunden</Text>
           <Button label="Zurück" onPress={() => router.back()} variant="secondary" />
         </Card>
       </Screen>
     );
   }
 
-  const property = bundle.property;
-  const isCompleted = report.status === 'completed' || report.status === 'exported';
+  const property              = bundle.property;
+  const isCompleted           = report.status === 'completed' || report.status === 'exported';
   const objectTariffSuggestions = genesisContext?.objectTariffSuggestions ?? [];
-  // isSuggestedWorkApplied is O(1) via cleanSignatures Set, so no separate memo needed
-  const applicableTariffs = objectTariffSuggestions.filter((work) => work.lineType !== 'control');
-  const allTariffSuggestionsApplied =
-    applicableTariffs.length > 0 && applicableTariffs.every((work) => isSuggestedWorkApplied(work));
+  const applicableTariffs     = objectTariffSuggestions.filter((w) => w.lineType !== 'control');
+  const allTariffApplied      = applicableTariffs.length > 0 && applicableTariffs.every((w) => isSuggestedWorkApplied(w));
 
   return (
     <Screen
@@ -324,7 +200,7 @@ export default function ReportScreen() {
       subtitle={savedAt ? `Automatisch gespeichert ${savedAt}` : 'Lokaler Entwurf'}
       footer={
         isCompleted ? (
-          <View style={styles.footerActions}>
+          <View className="gap-2">
             <Button label="PDF teilen" icon={Share2} loading={busy} onPress={sharePdf} variant="primary" />
             {report.status !== 'exported' ? (
               <Button label="Als exportiert markieren" icon={CheckCircle2} onPress={exportDone} variant="secondary" />
@@ -335,130 +211,111 @@ export default function ReportScreen() {
         )
       }
     >
+      {/* Property identity card */}
       <Card>
-        <View style={styles.statusLine}>
-          <Text style={styles.status}>{statusLabel(report.status)}</Text>
-          <Text style={styles.meta}>{property.customerNumber ? `Kundennummer ${property.customerNumber}` : ''}</Text>
+        <View className="flex-row items-center justify-between gap-2">
+          <View className="flex-row items-center rounded-full bg-primary-soft px-2 py-0.5">
+            <Text className="text-small font-semibold text-primary">{statusLabel(report.status)}</Text>
+          </View>
+          <Text className="text-small text-muted">{property.customerNumber ? `Nr. ${property.customerNumber}` : ''}</Text>
         </View>
-        <Text style={styles.title}>{property.propertyLabel || property.street || 'Liegenschaft'}</Text>
-        <Text style={styles.meta}>{joinAddress(property.street, property.postalCode, property.city)}</Text>
+        <Text className="text-h3 font-bold text-ink leading-[22px]">{property.propertyLabel || property.street || 'Liegenschaft'}</Text>
+        <Text className="text-small text-muted leading-[18px]">{joinAddress(property.street, property.postalCode, property.city)}</Text>
       </Card>
 
+      {/* Termin */}
       <SectionHeader title="Termin" />
       {isCompleted ? (
         <Card>
           <ReadRow label="Datum Reinigung" value={report.cleaningDate} />
-          <View style={styles.twoCols}>
-            <View style={styles.flexField}><ReadRow label="Uhrzeit von" value={report.timeFrom} /></View>
-            <View style={styles.flexField}><ReadRow label="bis" value={report.timeTo} /></View>
+          <View className="flex-row gap-2">
+            <View className="flex-1"><ReadRow label="Uhrzeit von" value={report.timeFrom} /></View>
+            <View className="flex-1"><ReadRow label="bis"         value={report.timeTo}   /></View>
           </View>
         </Card>
       ) : (
         <Card>
-          <Field
-            error={errors.cleaningDate}
-            label="Datum Reinigung"
-            onChangeText={(value) => updateReport({ cleaningDate: value })}
-            placeholder={todayPlaceholder}
-            value={report.cleaningDate}
-          />
-          <View style={styles.twoCols}>
-            <Field
-              containerStyle={styles.flexField}
-              label="Uhrzeit von"
-              onChangeText={(value) => updateReport({ timeFrom: value })}
-              placeholder="08:00"
-              value={report.timeFrom}
-            />
-            <Field
-              containerStyle={styles.flexField}
-              label="bis"
-              onChangeText={(value) => updateReport({ timeTo: value })}
-              placeholder="09:30"
-              value={report.timeTo}
-            />
+          <Field error={errors.cleaningDate} label="Datum Reinigung" onChangeText={(v) => updateReport({ cleaningDate: v })} placeholder={todayPlaceholder} value={report.cleaningDate} />
+          <View className="flex-row gap-2">
+            <Field containerStyle={{ flex: 1 }} label="Uhrzeit von" onChangeText={(v) => updateReport({ timeFrom: v })} placeholder="08:00" value={report.timeFrom} />
+            <Field containerStyle={{ flex: 1 }} label="bis"         onChangeText={(v) => updateReport({ timeTo:   v })} placeholder="09:30" value={report.timeTo} />
           </View>
         </Card>
       )}
 
-      <SectionHeader title="Arbeiten vor Ort" meta={`${cleanItems.length} Positionen mit Inhalt`} />
+      {/* Work items */}
+      <SectionHeader title="Arbeiten vor Ort" meta={`${cleanItems.length} Positionen`} />
+
+      {/* Suggestions panel — only in draft with genesis context */}
       {!isCompleted && genesisContext ? (
         <Card>
-          <View style={styles.suggestionHeader}>
-            <View style={styles.doneHeader}>
-              <Sparkles color={colors.primary} size={21} />
-              <Text style={styles.title}>Intelligente Vorschläge</Text>
+          <View className="flex-row items-center justify-between flex-wrap gap-3">
+            <View className="flex-row items-center gap-2">
+              <Sparkles color={colors.primary} size={18} strokeWidth={2} />
+              <Text className="text-h3 font-bold text-ink">Intelligente Vorschläge</Text>
             </View>
-            {genesisContext.objectTariffSuggestions.some((work) => work.lineType !== 'control') ? (
+            {genesisContext.objectTariffSuggestions.some((w) => w.lineType !== 'control') ? (
               <Button
-                disabled={allTariffSuggestionsApplied}
+                disabled={allTariffApplied}
                 icon={Plus}
-                label={allTariffSuggestionsApplied ? 'Tarife übernommen' : 'Alle Tarife übernehmen'}
+                label={allTariffApplied ? 'Tarife übernommen' : 'Alle Tarife'}
                 onPress={applyAllTariffs}
                 variant="secondary"
               />
             ) : null}
           </View>
-          <View style={styles.segmented}>
-            <SuggestionTabButton
-              active={suggestionTab === 'objectTariff'}
-              count={genesisContext.objectTariffSuggestions.length}
-              label="Objekttarife"
-              onPress={() => setSuggestionTab('objectTariff')}
-            />
-            <SuggestionTabButton
-              active={suggestionTab === 'invoiceLine'}
-              count={genesisContext.invoiceLineSuggestions.length}
-              label="Rechnungen"
-              onPress={() => setSuggestionTab('invoiceLine')}
-            />
-            <SuggestionTabButton
-              active={suggestionTab === 'history'}
-              count={genesisContext.history.length}
-              label="Historie"
-              onPress={() => setSuggestionTab('history')}
-            />
-            <SuggestionTabButton
-              active={suggestionTab === 'arbvol'}
-              count={genesisContext.arbvolSummary.length}
-              label="Arbeitsvolumen"
-              onPress={() => setSuggestionTab('arbvol')}
-            />
+
+          {/* Segmented tabs */}
+          <View className="flex-row gap-1 bg-surface-muted rounded-md p-1">
+            {(['objectTariff', 'invoiceLine', 'history', 'arbvol'] as SuggestionTab[]).map((tab) => {
+              const count = tab === 'objectTariff' ? genesisContext.objectTariffSuggestions.length
+                          : tab === 'invoiceLine'  ? genesisContext.invoiceLineSuggestions.length
+                          : tab === 'history'      ? genesisContext.history.length
+                          : genesisContext.arbvolSummary.length;
+              const label = tab === 'objectTariff' ? 'Tarife'
+                          : tab === 'invoiceLine'  ? 'Rechnungen'
+                          : tab === 'history'      ? 'Historie'
+                          : 'Arbeitsvol.';
+              const active = suggestionTab === tab;
+              return (
+                <Pressable
+                  key={tab}
+                  accessibilityRole="button"
+                  onPress={() => setSuggestionTab(tab)}
+                  className={['flex-1 items-center rounded-sm min-h-[44px] px-1 py-2 gap-0.5 justify-center', active ? 'bg-surface border border-border' : ''].join(' ')}
+                  style={({ pressed }) => pressed ? { opacity: 0.75 } : undefined}
+                >
+                  <Text className={`text-small font-semibold text-center ${active ? 'text-primary' : 'text-muted'}`} numberOfLines={2}>{label}</Text>
+                  <Text className={`text-xs font-bold ${active ? 'text-primary' : 'text-muted-light'}`}>{count}</Text>
+                </Pressable>
+              );
+            })}
           </View>
 
-          {suggestionTab === 'objectTariff' ? (
+          {/* Suggestion rows */}
+          {suggestionTab === 'objectTariff' && (
             genesisContext.objectTariffSuggestions.length ? (
-              <View style={styles.suggestionList}>
+              <View className="gap-1">
                 {genesisContext.objectTariffSuggestions.slice(0, 16).map((work) => {
                   const canApply = work.lineType !== 'control';
                   return (
-                  <SuggestionRow
-                    key={work.id}
-                    actionLabel={!canApply ? 'Kontext' : isSuggestedWorkApplied(work) ? 'Übernommen' : '+'}
-                    applied={!canApply || isSuggestedWorkApplied(work)}
-                    meta={[
-                      work.lineType === 'control' && 'Kontrollzeile',
-                      work.tariffCode,
-                      work.quantity && `Anzahl ${work.quantity}`,
-                      work.tp && `${work.tp} TP`,
-                      work.amount && `CHF ${work.amount}`,
-                      work.minutes && `${work.minutes} Min.`,
-                    ].filter(Boolean).join(' · ')}
-                    onPress={() => applyTariffSuggestion(work)}
-                    subtitle={work.reason || work.notes}
-                    title={work.description || 'Tarifposition'}
-                  />
+                    <SuggestionRow
+                      key={work.id}
+                      actionLabel={!canApply ? 'Kontext' : isSuggestedWorkApplied(work) ? 'Übernommen' : '+'}
+                      applied={!canApply || isSuggestedWorkApplied(work)}
+                      meta={[work.lineType === 'control' && 'Kontrollzeile', work.tariffCode, work.quantity && `Anzahl ${work.quantity}`, work.tp && `${work.tp} TP`, work.amount && `CHF ${work.amount}`, work.minutes && `${work.minutes} Min.`].filter(Boolean).join(' · ')}
+                      onPress={() => applyTariffSuggestion(work)}
+                      subtitle={work.reason || work.notes}
+                      title={work.description || 'Tarifposition'}
+                    />
                   );
                 })}
               </View>
-            ) : (
-              <Text style={styles.meta}>Keine Objekttarife für diese Liegenschaft vorhanden.</Text>
-            )
-          ) : null}
-
-          {suggestionTab === 'invoiceLine' ? (
+            ) : <Text className="text-small text-muted">Keine Objekttarife für diese Liegenschaft vorhanden.</Text>
+          )}
+          {suggestionTab === 'invoiceLine' && (
             genesisContext.invoiceLineSuggestions.length ? (
-              <View style={styles.suggestionList}>
+              <View className="gap-1">
                 {genesisContext.invoiceLineSuggestions.slice(0, 16).map((work) => {
                   const canApply = work.lineType !== 'control';
                   return (
@@ -466,15 +323,7 @@ export default function ReportScreen() {
                       key={work.id}
                       actionLabel={!canApply ? 'Kontext' : isSuggestedWorkApplied(work) ? 'Übernommen' : '+'}
                       applied={!canApply || isSuggestedWorkApplied(work)}
-                      meta={[
-                        work.invoiceNumber && `Rechnung ${work.invoiceNumber}`,
-                        work.position && `Pos. ${work.position}`,
-                        work.lineType === 'control' && 'Kontrollzeile',
-                        work.tariffCode,
-                        work.quantity && `Anzahl ${work.quantity}`,
-                        work.amount && `CHF ${work.amount}`,
-                        work.unitPrice && `à ${work.unitPrice}`,
-                      ].filter(Boolean).join(' · ')}
+                      meta={[work.invoiceNumber && `Rechnung ${work.invoiceNumber}`, work.position && `Pos. ${work.position}`, work.lineType === 'control' && 'Kontrollzeile', work.tariffCode, work.quantity && `Anzahl ${work.quantity}`, work.amount && `CHF ${work.amount}`, work.unitPrice && `à ${work.unitPrice}`].filter(Boolean).join(' · ')}
                       onPress={() => applyInvoiceLineSuggestion(work)}
                       subtitle={work.reason || work.notes}
                       title={work.description || 'Rechnungsposition'}
@@ -482,14 +331,11 @@ export default function ReportScreen() {
                   );
                 })}
               </View>
-            ) : (
-              <Text style={styles.meta}>Keine Rechnungspositionen als Vorlage vorhanden.</Text>
-            )
-          ) : null}
-
-          {suggestionTab === 'history' ? (
+            ) : <Text className="text-small text-muted">Keine Rechnungspositionen als Vorlage vorhanden.</Text>
+          )}
+          {suggestionTab === 'history' && (
             genesisContext.history.length ? (
-              <View style={styles.suggestionList}>
+              <View className="gap-1">
                 {genesisContext.history.slice(0, 8).map((entry) => (
                   <SuggestionRow
                     key={entry.id}
@@ -502,14 +348,11 @@ export default function ReportScreen() {
                   />
                 ))}
               </View>
-            ) : (
-              <Text style={styles.meta}>Keine Historie aus Genesis vorhanden.</Text>
-            )
-          ) : null}
-
-          {suggestionTab === 'arbvol' ? (
+            ) : <Text className="text-small text-muted">Keine Historie aus Genesis vorhanden.</Text>
+          )}
+          {suggestionTab === 'arbvol' && (
             genesisContext.arbvolSummary.length ? (
-              <View style={styles.suggestionList}>
+              <View className="gap-1">
                 {genesisContext.arbvolSummary.map((work) => (
                   <SuggestionRow
                     key={work.id}
@@ -522,53 +365,45 @@ export default function ReportScreen() {
                   />
                 ))}
               </View>
-            ) : (
-              <Text style={styles.meta}>Kein Arbeitsvolumen für diese Liegenschaft vorhanden.</Text>
-            )
-          ) : null}
+            ) : <Text className="text-small text-muted">Kein Arbeitsvolumen für diese Liegenschaft vorhanden.</Text>
+          )}
         </Card>
       ) : null}
+
+      {/* Completed items — read-only */}
       {isCompleted ? (
-        <View style={styles.list}>
+        <View className="gap-2">
           {cleanItems.length ? cleanItems.map((item, index) => (
             <Card key={item.id} compact>
-              <Text style={styles.itemTitle}>{item.description || `Position ${index + 1}`}</Text>
-              <Text style={styles.meta}>
-                {[
-                  item.quantity && `Anzahl ${item.quantity}`,
-                  item.tp && `${item.tp} TP`,
-                  item.amount && `CHF ${item.amount}`,
-                  item.minutes && `${item.minutes} Min.`,
-                ].filter(Boolean).join(' · ') || '-'}
+              <Text className="text-base font-semibold text-ink leading-[22px]">{item.description || `Position ${index + 1}`}</Text>
+              <Text className="text-small text-muted leading-[18px]">
+                {[item.quantity && `Anzahl ${item.quantity}`, item.tp && `${item.tp} TP`, item.amount && `CHF ${item.amount}`, item.minutes && `${item.minutes} Min.`].filter(Boolean).join(' · ') || '-'}
               </Text>
             </Card>
           )) : (
-            <Card compact><Text style={styles.meta}>Keine Positionen erfasst.</Text></Card>
+            <Card compact><Text className="text-small text-muted">Keine Positionen erfasst.</Text></Card>
           )}
         </View>
       ) : (
         <>
-          <View style={styles.list}>
+          <View className="gap-2">
             {workItems.map((item, index) => (
               <Card key={item.id}>
-                <View style={styles.compactItemHeader}>
+                <View className="flex-row items-center gap-2 justify-between">
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Position ${index + 1} bearbeiten`}
                     onPress={() => toggleItem(item.id)}
-                    style={styles.itemSummary}
+                    className="flex-1 flex-row items-center gap-2 min-h-[48px]"
                   >
-                    {expandedItemIds.includes(item.id) || !item.description.trim() ? (
-                      <ChevronDown color={colors.muted} size={20} />
-                    ) : (
-                      <ChevronRight color={colors.muted} size={20} />
-                    )}
-                    <View style={styles.summaryText}>
-                      <Text style={styles.itemTitle}>{item.description || `Position ${index + 1}`}</Text>
-                      <Text style={styles.meta}>
-                        {[item.quantity && `Anzahl ${item.quantity}`, item.tp && `${item.tp} TP`, item.amount && `CHF ${item.amount}`, item.minutes && `${item.minutes} Min.`]
-                          .filter(Boolean)
-                          .join(' · ') || 'Zum Bearbeiten öffnen'}
+                    {expandedItemIds.includes(item.id) || !item.description.trim()
+                      ? <ChevronDown  color={colors.mutedLight} size={18} strokeWidth={2} />
+                      : <ChevronRight color={colors.mutedLight} size={18} strokeWidth={2} />
+                    }
+                    <View className="flex-1 gap-0.5">
+                      <Text className="text-base font-semibold text-ink leading-[22px]">{item.description || `Position ${index + 1}`}</Text>
+                      <Text className="text-small text-muted leading-[18px]">
+                        {[item.quantity && `Anzahl ${item.quantity}`, item.tp && `${item.tp} TP`, item.amount && `CHF ${item.amount}`, item.minutes && `${item.minutes} Min.`].filter(Boolean).join(' · ') || 'Zum Bearbeiten öffnen'}
                       </Text>
                     </View>
                   </Pressable>
@@ -577,50 +412,23 @@ export default function ReportScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`Position ${index + 1} löschen`}
                       onPress={() => removeWorkItem(index)}
-                      style={styles.iconButton}
+                      className="items-center justify-center rounded-md min-h-[44px] min-w-[44px]"
                     >
-                      <Trash2 color={colors.danger} size={20} />
+                      <Trash2 color={colors.danger} size={18} strokeWidth={2} />
                     </Pressable>
                   ) : null}
                 </View>
+
                 {expandedItemIds.includes(item.id) || !item.description.trim() ? (
                   <>
-                    <Field
-                      label="Bezeichnung"
-                      onChangeText={(value) => updateWorkItem(index, { description: value })}
-                      placeholder="Ausgeführte Arbeit"
-                      value={item.description}
-                    />
-                    <View style={styles.twoCols}>
-                      <Field
-                        containerStyle={styles.flexField}
-                        keyboardType="decimal-pad"
-                        label="Anzahl"
-                        onChangeText={(value) => updateWorkItem(index, { quantity: value })}
-                        value={item.quantity}
-                      />
-                      <Field
-                        containerStyle={styles.flexField}
-                        keyboardType="decimal-pad"
-                        label="Min."
-                        onChangeText={(value) => updateWorkItem(index, { minutes: value })}
-                        value={item.minutes}
-                      />
+                    <Field label="Bezeichnung"  onChangeText={(v) => updateWorkItem(index, { description: v })} placeholder="Ausgeführte Arbeit" value={item.description} />
+                    <View className="flex-row gap-2">
+                      <Field containerStyle={{ flex: 1 }} keyboardType="decimal-pad" label="Anzahl" onChangeText={(v) => updateWorkItem(index, { quantity: v })} value={item.quantity} />
+                      <Field containerStyle={{ flex: 1 }} keyboardType="decimal-pad" label="Min."   onChangeText={(v) => updateWorkItem(index, { minutes:  v })} value={item.minutes} />
                     </View>
-                    <View style={styles.twoCols}>
-                      <Field
-                        containerStyle={styles.flexField}
-                        label="TP"
-                        onChangeText={(value) => updateWorkItem(index, { tp: value })}
-                        value={item.tp}
-                      />
-                      <Field
-                        containerStyle={styles.flexField}
-                        keyboardType="decimal-pad"
-                        label="Betrag"
-                        onChangeText={(value) => updateWorkItem(index, { amount: value })}
-                        value={item.amount}
-                      />
+                    <View className="flex-row gap-2">
+                      <Field containerStyle={{ flex: 1 }} label="TP"     onChangeText={(v) => updateWorkItem(index, { tp:     v })} value={item.tp} />
+                      <Field containerStyle={{ flex: 1 }} keyboardType="decimal-pad" label="Betrag" onChangeText={(v) => updateWorkItem(index, { amount: v })} value={item.amount} />
                     </View>
                   </>
                 ) : null}
@@ -631,6 +439,7 @@ export default function ReportScreen() {
         </>
       )}
 
+      {/* Notes & name */}
       <SectionHeader title="Bemerkungen" />
       {isCompleted ? (
         <Card>
@@ -643,35 +452,42 @@ export default function ReportScreen() {
             label="Bemerkungen"
             multiline
             numberOfLines={4}
-            onChangeText={(value) => updateReport({ notes: value })}
-            style={styles.textArea}
+            onChangeText={(v) => updateReport({ notes: v })}
+            style={{ minHeight: 112 }}
             textAlignVertical="top"
             value={report.notes}
           />
           <Field
             error={errors.chimneySweepName}
             label="Name Kaminfeger"
-            onChangeText={(value) => updateReport({ chimneySweepName: value })}
+            onChangeText={(v) => updateReport({ chimneySweepName: v })}
             value={report.chimneySweepName}
           />
         </Card>
       )}
 
+      {/* Export section */}
       {isCompleted ? (
         <Card>
-          <View style={styles.doneHeader}>
-            <FileText color={colors.primary} size={22} />
-            <Text style={styles.title}>Übergabe ans Büro</Text>
+          <View className="flex-row items-center gap-2">
+            <FileText color={colors.primary} size={20} strokeWidth={2} />
+            <Text className="text-h3 font-bold text-ink">Übergabe ans Büro</Text>
           </View>
           <Button label="PDF teilen" icon={Share2} loading={busy} onPress={sharePdf} variant="primary" />
           <Button
             label={showJson ? 'Strukturierte Daten ausblenden' : 'Strukturierte Daten anzeigen'}
             icon={FileJson2}
-            onPress={() => setShowJson((current) => !current)}
+            onPress={() => setShowJson((c) => !c)}
             variant="ghost"
           />
           {showJson ? (
-            <Text selectable style={styles.json}>{structuredJson}</Text>
+            <Text
+              selectable
+              className="text-xs text-ink leading-[17px] bg-surface-muted rounded-md p-3"
+              style={{ fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}
+            >
+              {structuredJson}
+            </Text>
           ) : null}
         </Card>
       ) : null}
@@ -679,47 +495,18 @@ export default function ReportScreen() {
   );
 }
 
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
 function ReadRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.readRow}>
-      <Text style={styles.readLabel}>{label}</Text>
-      <Text style={styles.readValue}>{value || '-'}</Text>
+    <View className="gap-0.5">
+      <Text className="text-xs font-semibold text-muted-light uppercase tracking-wide">{label}</Text>
+      <Text className="text-base font-medium text-ink leading-6">{value || '-'}</Text>
     </View>
   );
 }
 
-function SuggestionTabButton({
-  active,
-  count,
-  label,
-  onPress,
-}: {
-  active: boolean;
-  count: number;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${label} Vorschläge anzeigen`}
-      onPress={onPress}
-      style={[styles.segmentButton, active ? styles.segmentButtonActive : null]}
-    >
-      <Text numberOfLines={2} style={[styles.segmentLabel, active ? styles.segmentLabelActive : null]}>{label}</Text>
-      <Text numberOfLines={1} style={[styles.segmentCount, active ? styles.segmentLabelActive : null]}>{count}</Text>
-    </Pressable>
-  );
-}
-
-function SuggestionRow({
-  actionLabel,
-  applied,
-  meta,
-  onPress,
-  subtitle,
-  title,
-}: {
+function SuggestionRow({ actionLabel, applied, meta, onPress, subtitle, title }: {
   actionLabel: string;
   applied: boolean;
   meta: string;
@@ -728,267 +515,52 @@ function SuggestionRow({
   title: string;
 }) {
   return (
-    <View style={styles.suggestionRow}>
-      <View style={styles.suggestionText}>
-        <Text style={styles.suggestionTitle}>{title}</Text>
-        <Text style={styles.meta}>{meta || '-'}</Text>
-        {subtitle ? <Text style={styles.suggestionReason}>{subtitle}</Text> : null}
+    <View className="flex-row items-center bg-surface-muted rounded-md gap-3 p-3">
+      <View className="flex-1 gap-0.5">
+        <Text className="text-base font-semibold text-ink leading-[22px]">{title}</Text>
+        <Text className="text-small text-muted leading-[18px]">{meta || '-'}</Text>
+        {subtitle ? <Text className="text-small text-muted leading-[18px]">{subtitle}</Text> : null}
       </View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={applied ? 'Vorschlag wurde bereits übernommen' : 'Vorschlag übernehmen'}
         disabled={applied}
         onPress={onPress}
-        style={[styles.suggestionAction, applied ? styles.suggestionActionApplied : null]}
+        className={[
+          'items-center justify-center rounded-sm min-h-[44px] px-3',
+          applied ? 'bg-primary-soft border border-border min-w-[96px]' : 'bg-primary min-w-[44px]',
+        ].join(' ')}
+        style={({ pressed }) => pressed && !applied ? { opacity: 0.78 } : undefined}
       >
-        <Text numberOfLines={1} style={[styles.suggestionActionText, applied ? styles.suggestionActionTextApplied : null]}>{actionLabel}</Text>
+        <Text
+          numberOfLines={1}
+          className={`text-small font-bold ${applied ? 'text-primary' : 'text-white'}`}
+        >
+          {actionLabel}
+        </Text>
       </Pressable>
     </View>
   );
 }
 
+// ─── Pure helpers ─────────────────────────────────────────────────────────────
+
 function cleanWorkItems(items: WorkItem[]): WorkItem[] {
   return items
-    .filter((item) =>
-      [item.quantity, item.description, item.tp, item.amount, item.minutes].some((value) => value.trim()),
-    )
-    .map((item, index) => ({ ...item, sortOrder: index }));
+    .filter((item) => [item.quantity, item.description, item.tp, item.amount, item.minutes].some((v) => v.trim()))
+    .map((item, i) => ({ ...item, sortOrder: i }));
 }
-
 function workFromPlannedSuggestion(reportId: string, work: GenesisPlannedWork): WorkItem {
-  return {
-    id: createId('item'),
-    reportId,
-    quantity: work.quantity,
-    description: work.description || work.notes || 'Genesis-Vorschlag',
-    tp: work.tp,
-    amount: work.amount,
-    minutes: work.minutes,
-    sortOrder: 0,
-  };
+  return { id: createId('item'), reportId, quantity: work.quantity, description: work.description || work.notes || 'Genesis-Vorschlag', tp: work.tp, amount: work.amount, minutes: work.minutes, sortOrder: 0 };
 }
-
 function workFromHistory(reportId: string, entry: GenesisHistoryEntry): WorkItem {
-  return {
-    id: createId('item'),
-    reportId,
-    quantity: '',
-    description: entry.description || entry.notes || 'Historie-Vorschlag',
-    tp: '',
-    amount: '',
-    minutes: entry.minutes,
-    sortOrder: 0,
-  };
+  return { id: createId('item'), reportId, quantity: '', description: entry.description || entry.notes || 'Historie-Vorschlag', tp: '', amount: '', minutes: entry.minutes, sortOrder: 0 };
 }
-
 function workItemSignature(item: Pick<WorkItem, 'quantity' | 'description' | 'tp' | 'amount' | 'minutes'>): string {
-  return [item.quantity, item.description, item.tp, item.amount, item.minutes]
-    .map((value) => value.trim().toLowerCase())
-    .join('|');
+  return [item.quantity, item.description, item.tp, item.amount, item.minutes].map((v) => v.trim().toLowerCase()).join('|');
 }
-
 function statusLabel(status: ServiceReport['status']): string {
-  if (status === 'exported') {
-    return 'Exportiert';
-  }
-  if (status === 'completed') {
-    return 'Abgeschlossen';
-  }
+  if (status === 'exported')  return 'Exportiert';
+  if (status === 'completed') return 'Abgeschlossen';
   return 'Entwurf';
 }
-
-const styles = StyleSheet.create({
-  footerActions: {
-    gap: spacing.md,
-  },
-  statusLine: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-    justifyContent: 'space-between',
-  },
-  status: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: 999,
-    color: colors.primary,
-    fontSize: typography.label,
-    fontWeight: '900',
-    overflow: 'hidden',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    textTransform: 'uppercase',
-  },
-  title: {
-    color: colors.text,
-    fontSize: typography.h3,
-    fontWeight: '800',
-  },
-  meta: {
-    color: colors.muted,
-    fontSize: typography.small,
-    lineHeight: 19,
-  },
-  twoCols: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  flexField: {
-    flex: 1,
-  },
-  list: {
-    gap: spacing.md,
-  },
-  suggestionHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    justifyContent: 'space-between',
-  },
-  segmented: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 8,
-    flexDirection: 'row',
-    gap: spacing.xs,
-    padding: spacing.xs,
-  },
-  segmentButton: {
-    alignItems: 'center',
-    borderRadius: 6,
-    flex: 1,
-    gap: spacing.xs,
-    justifyContent: 'center',
-    minHeight: 48,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  segmentButtonActive: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-  },
-  segmentLabel: {
-    color: colors.muted,
-    fontSize: typography.small,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  segmentLabelActive: {
-    color: colors.primary,
-  },
-  segmentCount: {
-    color: colors.muted,
-    fontSize: typography.label,
-    fontWeight: '900',
-  },
-  suggestionList: {
-    gap: spacing.sm,
-  },
-  suggestionRow: {
-    alignItems: 'center',
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 8,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  suggestionText: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  suggestionTitle: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: '800',
-    lineHeight: 22,
-  },
-  suggestionReason: {
-    color: colors.muted,
-    fontSize: typography.small,
-    lineHeight: 18,
-  },
-  suggestionAction: {
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    justifyContent: 'center',
-    minHeight: 44,
-    minWidth: 44,
-    paddingHorizontal: spacing.md,
-  },
-  suggestionActionApplied: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.border,
-    borderWidth: 1,
-    minWidth: 96,
-  },
-  suggestionActionText: {
-    color: colors.surface,
-    fontSize: typography.small,
-    fontWeight: '900',
-  },
-  suggestionActionTextApplied: {
-    color: colors.primary,
-  },
-  compactItemHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-    justifyContent: 'space-between',
-  },
-  itemSummary: {
-    alignItems: 'center',
-    flex: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    minHeight: 48,
-  },
-  summaryText: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  itemTitle: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: '800',
-    lineHeight: 22,
-  },
-  iconButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    justifyContent: 'center',
-    minHeight: 44,
-    minWidth: 44,
-  },
-  textArea: {
-    minHeight: 112,
-  },
-  doneHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  json: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 8,
-    color: colors.text,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontSize: 12,
-    lineHeight: 17,
-    padding: spacing.md,
-  },
-  readRow: {
-    gap: spacing.xs,
-  },
-  readLabel: {
-    color: colors.muted,
-    fontSize: typography.label,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  readValue: {
-    color: colors.text,
-    fontSize: typography.body,
-    lineHeight: 23,
-  },
-});
