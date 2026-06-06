@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   CheckCircle2,
@@ -116,6 +116,9 @@ export default function ReportScreen() {
 
     return () => clearTimeout(timeout);
   }, [report, workItems, isDirty]);
+
+  // ISO date string for today — used as the date field placeholder; stable per mount
+  const todayPlaceholder = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   // Compute once per render cycle; used by structuredJson, suggestion checks, and JSX meta
   const cleanItems = useMemo(() => cleanWorkItems(workItems), [workItems]);
@@ -342,31 +345,41 @@ export default function ReportScreen() {
       </Card>
 
       <SectionHeader title="Termin" />
-      <Card>
-        <Field
-          error={errors.cleaningDate}
-          label="Datum Reinigung"
-          onChangeText={(value) => updateReport({ cleaningDate: value })}
-          placeholder="2026-06-06"
-          value={report.cleaningDate}
-        />
-        <View style={styles.twoCols}>
+      {isCompleted ? (
+        <Card>
+          <ReadRow label="Datum Reinigung" value={report.cleaningDate} />
+          <View style={styles.twoCols}>
+            <View style={styles.flexField}><ReadRow label="Uhrzeit von" value={report.timeFrom} /></View>
+            <View style={styles.flexField}><ReadRow label="bis" value={report.timeTo} /></View>
+          </View>
+        </Card>
+      ) : (
+        <Card>
           <Field
-            containerStyle={styles.flexField}
-            label="Uhrzeit von"
-            onChangeText={(value) => updateReport({ timeFrom: value })}
-            placeholder="08:00"
-            value={report.timeFrom}
+            error={errors.cleaningDate}
+            label="Datum Reinigung"
+            onChangeText={(value) => updateReport({ cleaningDate: value })}
+            placeholder={todayPlaceholder}
+            value={report.cleaningDate}
           />
-          <Field
-            containerStyle={styles.flexField}
-            label="bis"
-            onChangeText={(value) => updateReport({ timeTo: value })}
-            placeholder="09:30"
-            value={report.timeTo}
-          />
-        </View>
-      </Card>
+          <View style={styles.twoCols}>
+            <Field
+              containerStyle={styles.flexField}
+              label="Uhrzeit von"
+              onChangeText={(value) => updateReport({ timeFrom: value })}
+              placeholder="08:00"
+              value={report.timeFrom}
+            />
+            <Field
+              containerStyle={styles.flexField}
+              label="bis"
+              onChangeText={(value) => updateReport({ timeTo: value })}
+              placeholder="09:30"
+              value={report.timeTo}
+            />
+          </View>
+        </Card>
+      )}
 
       <SectionHeader title="Arbeiten vor Ort" meta={`${cleanItems.length} Positionen mit Inhalt`} />
       {!isCompleted && genesisContext ? (
@@ -515,105 +528,134 @@ export default function ReportScreen() {
           ) : null}
         </Card>
       ) : null}
-      <View style={styles.list}>
-        {workItems.map((item, index) => (
-          <Card key={item.id}>
-            <View style={styles.compactItemHeader}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Position ${index + 1} bearbeiten`}
-                onPress={() => toggleItem(item.id)}
-                style={styles.itemSummary}
-              >
+      {isCompleted ? (
+        <View style={styles.list}>
+          {cleanItems.length ? cleanItems.map((item, index) => (
+            <Card key={item.id} compact>
+              <Text style={styles.itemTitle}>{item.description || `Position ${index + 1}`}</Text>
+              <Text style={styles.meta}>
+                {[
+                  item.quantity && `Anzahl ${item.quantity}`,
+                  item.tp && `${item.tp} TP`,
+                  item.amount && `CHF ${item.amount}`,
+                  item.minutes && `${item.minutes} Min.`,
+                ].filter(Boolean).join(' · ') || '-'}
+              </Text>
+            </Card>
+          )) : (
+            <Card compact><Text style={styles.meta}>Keine Positionen erfasst.</Text></Card>
+          )}
+        </View>
+      ) : (
+        <>
+          <View style={styles.list}>
+            {workItems.map((item, index) => (
+              <Card key={item.id}>
+                <View style={styles.compactItemHeader}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Position ${index + 1} bearbeiten`}
+                    onPress={() => toggleItem(item.id)}
+                    style={styles.itemSummary}
+                  >
+                    {expandedItemIds.includes(item.id) || !item.description.trim() ? (
+                      <ChevronDown color={colors.muted} size={20} />
+                    ) : (
+                      <ChevronRight color={colors.muted} size={20} />
+                    )}
+                    <View style={styles.summaryText}>
+                      <Text style={styles.itemTitle}>{item.description || `Position ${index + 1}`}</Text>
+                      <Text style={styles.meta}>
+                        {[item.quantity && `Anzahl ${item.quantity}`, item.tp && `${item.tp} TP`, item.amount && `CHF ${item.amount}`, item.minutes && `${item.minutes} Min.`]
+                          .filter(Boolean)
+                          .join(' · ') || 'Zum Bearbeiten öffnen'}
+                      </Text>
+                    </View>
+                  </Pressable>
+                  {workItems.length > 1 ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Position ${index + 1} löschen`}
+                      onPress={() => removeWorkItem(index)}
+                      style={styles.iconButton}
+                    >
+                      <Trash2 color={colors.danger} size={20} />
+                    </Pressable>
+                  ) : null}
+                </View>
                 {expandedItemIds.includes(item.id) || !item.description.trim() ? (
-                  <ChevronDown color={colors.muted} size={20} />
-                ) : (
-                  <ChevronRight color={colors.muted} size={20} />
-                )}
-                <View style={styles.summaryText}>
-                  <Text style={styles.itemTitle}>{item.description || `Position ${index + 1}`}</Text>
-                  <Text style={styles.meta}>
-                    {[item.quantity && `Anzahl ${item.quantity}`, item.tp && `${item.tp} TP`, item.amount && `CHF ${item.amount}`, item.minutes && `${item.minutes} Min.`]
-                      .filter(Boolean)
-                      .join(' · ') || 'Zum Bearbeiten öffnen'}
-                  </Text>
-                </View>
-              </Pressable>
-              {workItems.length > 1 ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Position ${index + 1} löschen`}
-                  onPress={() => removeWorkItem(index)}
-                  style={styles.iconButton}
-                >
-                  <Trash2 color={colors.danger} size={20} />
-                </Pressable>
-              ) : null}
-            </View>
-            {expandedItemIds.includes(item.id) || !item.description.trim() ? (
-              <>
-                <Field
-                  label="Bezeichnung"
-                  onChangeText={(value) => updateWorkItem(index, { description: value })}
-                  placeholder="Ausgeführte Arbeit"
-                  value={item.description}
-                />
-                <View style={styles.twoCols}>
-                  <Field
-                    containerStyle={styles.flexField}
-                    keyboardType="decimal-pad"
-                    label="Anzahl"
-                    onChangeText={(value) => updateWorkItem(index, { quantity: value })}
-                    value={item.quantity}
-                  />
-                  <Field
-                    containerStyle={styles.flexField}
-                    keyboardType="decimal-pad"
-                    label="Min."
-                    onChangeText={(value) => updateWorkItem(index, { minutes: value })}
-                    value={item.minutes}
-                  />
-                </View>
-                <View style={styles.twoCols}>
-                  <Field
-                    containerStyle={styles.flexField}
-                    label="TP"
-                    onChangeText={(value) => updateWorkItem(index, { tp: value })}
-                    value={item.tp}
-                  />
-                  <Field
-                    containerStyle={styles.flexField}
-                    keyboardType="decimal-pad"
-                    label="Betrag"
-                    onChangeText={(value) => updateWorkItem(index, { amount: value })}
-                    value={item.amount}
-                  />
-                </View>
-              </>
-            ) : null}
-          </Card>
-        ))}
-      </View>
-      <Button label="Position hinzufügen" icon={Plus} onPress={addWorkItem} variant="secondary" />
+                  <>
+                    <Field
+                      label="Bezeichnung"
+                      onChangeText={(value) => updateWorkItem(index, { description: value })}
+                      placeholder="Ausgeführte Arbeit"
+                      value={item.description}
+                    />
+                    <View style={styles.twoCols}>
+                      <Field
+                        containerStyle={styles.flexField}
+                        keyboardType="decimal-pad"
+                        label="Anzahl"
+                        onChangeText={(value) => updateWorkItem(index, { quantity: value })}
+                        value={item.quantity}
+                      />
+                      <Field
+                        containerStyle={styles.flexField}
+                        keyboardType="decimal-pad"
+                        label="Min."
+                        onChangeText={(value) => updateWorkItem(index, { minutes: value })}
+                        value={item.minutes}
+                      />
+                    </View>
+                    <View style={styles.twoCols}>
+                      <Field
+                        containerStyle={styles.flexField}
+                        label="TP"
+                        onChangeText={(value) => updateWorkItem(index, { tp: value })}
+                        value={item.tp}
+                      />
+                      <Field
+                        containerStyle={styles.flexField}
+                        keyboardType="decimal-pad"
+                        label="Betrag"
+                        onChangeText={(value) => updateWorkItem(index, { amount: value })}
+                        value={item.amount}
+                      />
+                    </View>
+                  </>
+                ) : null}
+              </Card>
+            ))}
+          </View>
+          <Button label="Position hinzufügen" icon={Plus} onPress={addWorkItem} variant="secondary" />
+        </>
+      )}
 
-      <SectionHeader title="Bemerkungen und Abschluss" />
-      <Card>
-        <Field
-          label="Bemerkungen"
-          multiline
-          numberOfLines={4}
-          onChangeText={(value) => updateReport({ notes: value })}
-          style={styles.textArea}
-          textAlignVertical="top"
-          value={report.notes}
-        />
-        <Field
-          error={errors.chimneySweepName}
-          label="Name Kaminfeger"
-          onChangeText={(value) => updateReport({ chimneySweepName: value })}
-          value={report.chimneySweepName}
-        />
-      </Card>
+      <SectionHeader title="Bemerkungen" />
+      {isCompleted ? (
+        <Card>
+          {report.notes ? <ReadRow label="Bemerkungen" value={report.notes} /> : null}
+          <ReadRow label="Kaminfeger" value={report.chimneySweepName} />
+        </Card>
+      ) : (
+        <Card>
+          <Field
+            label="Bemerkungen"
+            multiline
+            numberOfLines={4}
+            onChangeText={(value) => updateReport({ notes: value })}
+            style={styles.textArea}
+            textAlignVertical="top"
+            value={report.notes}
+          />
+          <Field
+            error={errors.chimneySweepName}
+            label="Name Kaminfeger"
+            onChangeText={(value) => updateReport({ chimneySweepName: value })}
+            value={report.chimneySweepName}
+          />
+        </Card>
+      )}
 
       {isCompleted ? (
         <Card>
@@ -634,6 +676,15 @@ export default function ReportScreen() {
         </Card>
       ) : null}
     </Screen>
+  );
+}
+
+function ReadRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.readRow}>
+      <Text style={styles.readLabel}>{label}</Text>
+      <Text style={styles.readValue}>{value || '-'}</Text>
+    </View>
   );
 }
 
@@ -748,7 +799,7 @@ function statusLabel(status: ServiceReport['status']): string {
 
 const styles = StyleSheet.create({
   footerActions: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   statusLine: {
     alignItems: 'center',
@@ -921,9 +972,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     color: colors.text,
-    fontFamily: 'Courier',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontSize: 12,
     lineHeight: 17,
     padding: spacing.md,
+  },
+  readRow: {
+    gap: spacing.xs,
+  },
+  readLabel: {
+    color: colors.muted,
+    fontSize: typography.label,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  readValue: {
+    color: colors.text,
+    fontSize: typography.body,
+    lineHeight: 23,
   },
 });

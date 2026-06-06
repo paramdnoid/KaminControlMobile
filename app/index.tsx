@@ -55,18 +55,22 @@ export default function HomeScreen() {
   return (
     <Screen title="KaminControl" subtitle={subtitle}>
       <View style={styles.actions}>
-        <Button
-          label="Stammdaten importieren"
-          icon={FileSpreadsheet}
-          onPress={() => router.push('/import')}
-          variant="primary"
-        />
-        <Button
-          label="Rapporte"
-          icon={ListChecks}
-          onPress={() => router.push('/reports')}
-          variant="secondary"
-        />
+        <View style={styles.actionButton}>
+          <Button
+            label="Stammdaten importieren"
+            icon={FileSpreadsheet}
+            onPress={() => router.push('/import')}
+            variant="primary"
+          />
+        </View>
+        <View style={styles.actionButton}>
+          <Button
+            label="Rapporte"
+            icon={ListChecks}
+            onPress={() => router.push('/reports')}
+            variant="secondary"
+          />
+        </View>
       </View>
 
       <View style={styles.statsGrid}>
@@ -94,7 +98,9 @@ export default function HomeScreen() {
       </Card>
 
       {loading ? (
-        <ActivityIndicator color={colors.primary} />
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
       ) : properties.length ? (
         <View style={styles.list}>
           {properties.map((property) => (
@@ -139,6 +145,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
+  },
+  actionButton: {
+    flex: 1,
+    minWidth: 140,
+  },
+  loadingWrap: {
+    paddingVertical: spacing.lg,
   },
   statsGrid: {
     flexDirection: 'row',

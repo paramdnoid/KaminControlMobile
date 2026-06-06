@@ -119,9 +119,12 @@ export default function ImportScreen() {
       subtitle="CSV/XLSX oder ein vorbereitetes Genesis-Bundle lokal importieren."
     >
       <Card>
-        <Text style={styles.label}>CSV/XLSX</Text>
+        <Text style={styles.cardTitle}>CSV / XLSX</Text>
         <Text style={styles.text}>Import aus einer kontrollierten Kunden-/Liegenschaftsliste.</Text>
-        <Text style={styles.text}>{IMPORT_TEMPLATE_HEADERS.join(', ')}</Text>
+        <Text style={styles.text} numberOfLines={2}>
+          {IMPORT_TEMPLATE_HEADERS.slice(0, 8).join(', ')}
+          {IMPORT_TEMPLATE_HEADERS.length > 8 ? ` und ${IMPORT_TEMPLATE_HEADERS.length - 8} weitere` : ''}
+        </Text>
         <Button
           label={preview ? 'Andere CSV/XLSX wählen' : 'CSV/XLSX wählen'}
           icon={UploadCloud}
@@ -132,7 +135,7 @@ export default function ImportScreen() {
       </Card>
 
       <Card>
-        <Text style={styles.label}>Genesis-Bundle</Text>
+        <Text style={styles.cardTitle}>Genesis-Bundle</Text>
         <Text style={styles.text}>
           Importiert `genesis-export-v2.json` oder `genesis-mobile-export.zip` aus der Desktop-Converter-App. MDB-Dateien bleiben ausserhalb der Mobile-App.
         </Text>
@@ -204,11 +207,6 @@ export default function ImportScreen() {
               <Metric label="Arbeitsvolumen" value={`${arbvolCount}`} />
               <Metric label="Historie" value={`${genesisPreview.bundle.history.length}`} />
             </View>
-            <View style={styles.tableCounts}>
-              {Object.entries(genesisPreview.bundle.metadata.tableCounts).slice(0, 8).map(([table, count]) => (
-                <Text key={table} style={styles.countLine}>{table}: {count}</Text>
-              ))}
-            </View>
             {genesisPreview.warnings.slice(0, 5).map((warning) => (
               <Text key={warning} style={styles.warning}>{warning}</Text>
             ))}
@@ -240,7 +238,7 @@ export default function ImportScreen() {
             <Metric label="Aktualisiert" value={`${result.updated}`} />
             <Metric label="Übersprungen" value={`${result.skipped}`} />
           </View>
-          <Button label="Zur Suche" onPress={() => router.replace('/')} variant="secondary" />
+          <Button label="Zur Liegenschaftssuche" onPress={() => router.replace('/')} variant="secondary" />
         </Card>
       ) : null}
 
@@ -261,7 +259,7 @@ export default function ImportScreen() {
             <Metric label="PDFs" value={`${genesisResult.pdfDocuments}`} />
             <Metric label="Historie" value={`${genesisResult.history}`} />
           </View>
-          <Button label="Zur Suche" onPress={() => router.replace('/')} variant="secondary" />
+          <Button label="Zur Liegenschaftssuche" onPress={() => router.replace('/')} variant="secondary" />
         </Card>
       ) : null}
     </Screen>
@@ -278,11 +276,10 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  label: {
+  cardTitle: {
     color: colors.text,
-    fontSize: typography.label,
+    fontSize: typography.h3,
     fontWeight: '800',
-    textTransform: 'uppercase',
   },
   text: {
     color: colors.muted,
@@ -327,17 +324,6 @@ const styles = StyleSheet.create({
   },
   warning: {
     color: colors.warning,
-    fontSize: typography.small,
-    fontWeight: '700',
-  },
-  tableCounts: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 8,
-    gap: spacing.xs,
-    padding: spacing.md,
-  },
-  countLine: {
-    color: colors.text,
     fontSize: typography.small,
     fontWeight: '700',
   },

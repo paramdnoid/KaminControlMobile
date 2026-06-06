@@ -182,7 +182,7 @@ export default function PropertyDetailScreen() {
 
           {genesisContext.invoices.length ? (
             <>
-              <SectionHeader title="Rechnungen" meta="Read-only aus Genesis" />
+              <SectionHeader title="Rechnungen" />
               <View style={styles.list}>
                 {genesisContext.invoices.map((invoice) => {
                   const lines = genesisContext.invoiceLines.filter((line) => line.invoiceNumber === invoice.invoiceNumber);
@@ -192,11 +192,14 @@ export default function PropertyDetailScreen() {
                       <View style={styles.invoiceHeader}>
                         <View style={styles.invoiceTitleBlock}>
                           <Text style={styles.itemTitle}>Rechnung {invoice.invoiceNumber}</Text>
-                          <Text style={styles.meta}>
-                            {[invoiceStatusLabel(invoice.status), invoice.workDate || invoice.invoiceDate, invoice.totalAmount && `CHF ${invoice.totalAmount}`]
-                              .filter(Boolean)
-                              .join(' · ') || '-'}
-                          </Text>
+                          <View style={styles.invoiceStatusRow}>
+                            <Text style={[styles.statusPill, invoiceStatusStyle(invoice.status)]}>{invoiceStatusLabel(invoice.status)}</Text>
+                            <Text style={styles.meta}>
+                              {[invoice.workDate || invoice.invoiceDate, invoice.totalAmount && `CHF ${invoice.totalAmount}`]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </Text>
+                          </View>
                         </View>
                         {documents[0] ? (
                           <Button
@@ -299,7 +302,7 @@ export default function PropertyDetailScreen() {
 
           {genesisContext.history.length ? (
             <>
-              <SectionHeader title="Historie" meta="Read-only aus Genesis" />
+              <SectionHeader title="Historie" />
               <View style={styles.list}>
                 {genesisContext.history.slice(0, 8).map((entry) => (
                   <Card key={entry.id} compact>
@@ -358,6 +361,19 @@ function invoiceStatusLabel(status: string): string {
   return 'Unbekannt';
 }
 
+function invoiceStatusStyle(status: string): { backgroundColor: string; color: string } {
+  if (status === 'paid') {
+    return { backgroundColor: colors.primarySoft, color: colors.success };
+  }
+  if (status === 'partial') {
+    return { backgroundColor: colors.accentSoft, color: colors.warning };
+  }
+  if (status === 'open') {
+    return { backgroundColor: colors.dangerSoft, color: colors.danger };
+  }
+  return { backgroundColor: colors.surfaceMuted, color: colors.muted };
+}
+
 const styles = StyleSheet.create({
   title: {
     color: colors.text,
@@ -381,6 +397,20 @@ const styles = StyleSheet.create({
   invoiceTitleBlock: {
     flex: 1,
     gap: spacing.xs,
+  },
+  invoiceStatusRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  statusPill: {
+    borderRadius: 999,
+    fontSize: typography.label,
+    fontWeight: '800',
+    overflow: 'hidden',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   invoiceGrid: {
     flexDirection: 'row',
@@ -417,7 +447,7 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   info: {
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   label: {
     color: colors.muted,
