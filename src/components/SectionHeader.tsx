@@ -11,7 +11,7 @@ export function SectionHeader({ title, meta }: Props) {
       <View className="flex-row items-baseline justify-between gap-3">
         <Text className="text-h2 font-bold text-ink tracking-tight">{title}</Text>
         {meta ? (
-          <Text className="text-small text-muted-light shrink text-right">{meta}</Text>
+          <Text className="text-small text-muted shrink text-right">{meta}</Text>
         ) : null}
       </View>
     </View>

@@ -263,8 +263,8 @@ export default function ReportScreen() {
       {/* Property identity card */}
       <Card>
         <View className="flex-row items-center justify-between gap-2">
-          <View className="flex-row items-center rounded-full bg-primary-soft px-2 py-0.5">
-            <Text className="text-small font-semibold text-primary">{statusLabel(report.status)}</Text>
+          <View className={`flex-row items-center rounded-full px-2 py-0.5 ${statusBadge(report.status).bg}`}>
+            <Text className={`text-small font-semibold ${statusBadge(report.status).text}`}>{statusLabel(report.status)}</Text>
           </View>
           <Text className="text-small text-muted">{property.customerNumber ? `Nr. ${property.customerNumber}` : ''}</Text>
         </View>
@@ -337,7 +337,7 @@ export default function ReportScreen() {
                   style={({ pressed }) => pressed ? { opacity: 0.75 } : undefined}
                 >
                   <Text className={`text-small font-semibold text-center ${active ? 'text-primary' : 'text-muted'}`} numberOfLines={2}>{label}</Text>
-                  <Text className={`text-xs font-bold ${active ? 'text-primary' : 'text-muted-light'}`}>{count}</Text>
+                  <Text className={`text-xs font-bold ${active ? 'text-primary' : 'text-muted'}`}>{count}</Text>
                 </Pressable>
               );
             })}
@@ -551,7 +551,7 @@ export default function ReportScreen() {
 function ReadRow({ label, value }: { label: string; value: string }) {
   return (
     <View className="gap-0.5">
-      <Text className="text-xs font-semibold text-muted-light uppercase tracking-wide">{label}</Text>
+      <Text className="text-xs font-semibold text-muted uppercase tracking-wide">{label}</Text>
       <Text className="text-base font-medium text-ink leading-6">{value || '-'}</Text>
     </View>
   );
@@ -614,4 +614,9 @@ function statusLabel(status: ServiceReport['status']): string {
   if (status === 'exported')  return 'Exportiert';
   if (status === 'completed') return 'Abgeschlossen';
   return 'Entwurf';
+}
+function statusBadge(status: ServiceReport['status']): { bg: string; text: string } {
+  if (status === 'exported')  return { bg: 'bg-primary-soft', text: 'text-success' };
+  if (status === 'completed') return { bg: 'bg-info-soft',    text: 'text-info' };
+  return { bg: 'bg-accent-soft', text: 'text-warning' };
 }
