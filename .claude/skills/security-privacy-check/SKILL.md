@@ -1,7 +1,7 @@
 ---
 description: Review sensitive local data, generated artifacts, unsafe commands, Claude permissions, hook behavior, and privacy risks in KaminControlMobile.
 effort: high
-allowed-tools: Read Grep Glob LS Bash
+disallowed-tools: Edit MultiEdit Write
 ---
 
 # Security Privacy Check

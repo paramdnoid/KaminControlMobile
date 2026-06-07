@@ -17,6 +17,8 @@ BLOCKED_REGEXES = [
     (r"\bgit\s+checkout\s+--\s+", "git checkout -- path restore"),
     (r"\bgit\s+restore\b", "git restore"),
     (r"\bgit\s+stash\s+(drop|clear)\b", "git stash destructive mode"),
+    (r"\bfind\b.*\s-delete\b", "find -delete"),
+    (r"\bfind\b.*\s-exec\s+(rm|mv|cp|chmod|chown)\b", "find -exec destructive command"),
     (r"(^|[;&|]\s*)sudo\b", "sudo"),
     (r"\bchmod\s+-R\s+777\b", "chmod -R 777"),
     (r"\bchown\s+-R\b", "recursive chown"),
@@ -27,6 +29,21 @@ BLOCKED_REGEXES = [
     (r"\beas\s+submit\b", "EAS submit"),
     (r"\b(curl|wget)\b.*\|\s*(sh|bash|zsh)\b", "remote shell pipe"),
 ]
+
+
+def deny(reason: str) -> int:
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": reason,
+                }
+            }
+        )
+    )
+    return 0
 
 
 def read_payload() -> dict:
@@ -81,13 +98,11 @@ def main() -> int:
     compact = re.sub(r"\s+", " ", command)
     for pattern, reason in BLOCKED_REGEXES:
         if re.search(pattern, compact, flags=re.IGNORECASE):
-            print(f"Blocked dangerous command ({reason}): {compact}", file=sys.stderr)
-            return 2
+            return deny(f"Blocked dangerous command ({reason}): {compact}")
 
     sensitive = command_mentions_sensitive_path(command)
     if sensitive:
-        print(f"Blocked command touching sensitive/generated path: {sensitive}", file=sys.stderr)
-        return 2
+        return deny(f"Blocked command touching sensitive/generated path: {sensitive}")
 
     return 0
 

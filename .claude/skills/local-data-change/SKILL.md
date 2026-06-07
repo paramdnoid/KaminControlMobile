@@ -1,7 +1,6 @@
 ---
 description: Work on local persistence, imports, SQLite/web fallback behavior, autosave, data integrity, and shared type contracts.
 effort: high
-allowed-tools: Read Grep Glob LS Bash Edit MultiEdit Write
 paths:
   - "src/data/**/*.ts"
   - "src/import/**/*.ts"

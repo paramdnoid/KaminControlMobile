@@ -1,7 +1,6 @@
 ---
 description: Update README, Claude config docs, project memory guidance, context hygiene, effort policy, and workflow documentation.
 effort: medium
-allowed-tools: Read Grep Glob LS Bash Edit MultiEdit Write
 paths:
   - "README.md"
   - "CLAUDE.md"

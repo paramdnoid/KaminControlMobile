@@ -19,7 +19,9 @@
 - Converter UI: `npm run converter:start`
 - Converter CLI: `npm run converter:convert -- <Daten.zip> <output.json>`
 - Lint: `npm run lint`, `npm run lint:fix`
-- Claude settings and hook simulations: `npm run claude:validate-settings` (shared settings, local settings when present, and guard-hook regression tests)
+- Claude settings and hook simulations: `npm run claude:validate-settings` (shared/local settings schema, guard-hook regression tests, and validation-marker workflow)
+- Manual final gate: `/ship-check`
+- Manual fresh diff review: `/diff-review <scope or plan>`
 
 ## Routing
 
@@ -38,6 +40,8 @@ Use the main thread as orchestrator. Specialists do not call other agents. When 
 ## Working Rules
 
 - Start from repo evidence: inspect `package.json`, `README.md`, affected source, and existing scripts before changing guidance or code.
+- Prefer `rg`/`rg --files` for repo search and keep shared Bash permissions narrow; add local-only convenience rules in `.claude/settings.local.json` only when they are concrete and safe.
+- Do not broad-preapprove tools in skills. Review, planning, security, and verification skills stay read-only with `disallowed-tools: Edit MultiEdit Write`.
 - Keep V1 scope honest. Do not add backend, auth, cloud sync, or direct Genesis sync assumptions unless the user requests a new scope.
 - Preserve customer-data safety. Do not read, summarize, or mutate generated PDFs, MDBs, ZIPs, exported bundles, or `artifacts/` unless the user explicitly asks for that artifact work.
 - Prefer existing patterns: Expo Router in `app/`, shared UI in `src/components/`, types in `src/types.ts`, local data in `src/data/`, converter code in `desktop-converter/`.
@@ -46,6 +50,8 @@ Use the main thread as orchestrator. Specialists do not call other agents. When 
 ## Validation
 
 - Config-only changes: parse shared/local JSON, run `npm run claude:validate-settings`, compile Python hooks, check agent skill links, and `git diff --check -- CLAUDE.md .claude .gitignore`.
+- Bash-based file changes must still be validated: `mark_validation_needed.py` classifies Git changes after mutating Bash commands, and `quality_gate_stop.py` falls back to Git status when no marker exists.
+- Run `/ship-check` before commit, push, PR, or handoff.
 - App or shared TypeScript changes: `npm run typecheck` and `npm run lint`.
 - Converter changes: `npm run typecheck`, `npm run converter:test`, and `npm run converter:build`.
 - PDF/report flow changes: include `npm run typecheck` + `npm run lint` and manually inspect generated HTML/JSON logic.

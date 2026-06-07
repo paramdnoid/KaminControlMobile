@@ -1,7 +1,6 @@
 ---
 description: Review or improve KaminControlMobile mobile UI, UX, responsive layout, accessibility, component placement, and premium visual quality.
 effort: high
-allowed-tools: Read Grep Glob LS Bash Edit MultiEdit Write
 paths:
   - "app/**/*.tsx"
   - "src/components/**/*.tsx"

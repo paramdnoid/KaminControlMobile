@@ -8,7 +8,22 @@ import os
 import sys
 from typing import Iterable
 
-from sensitive_paths import is_sensitive, normalize_path
+from sensitive_paths import is_allowed_sensitive_exception, is_sensitive, normalize_path
+
+
+def deny(reason: str) -> int:
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": reason,
+                }
+            }
+        )
+    )
+    return 0
 
 
 def read_payload() -> dict:
@@ -42,9 +57,10 @@ def main() -> int:
     paths = sorted({normalize_path(path, cwd) for path in iter_paths(tool_input)})
 
     for path in paths:
+        if is_allowed_sensitive_exception(path):
+            continue
         if is_sensitive(path):
-            print(f"Blocked sensitive/generated path access: {path}", file=sys.stderr)
-            return 2
+            return deny(f"Blocked sensitive/generated path access: {path}")
 
     return 0
 

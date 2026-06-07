@@ -1,7 +1,6 @@
 ---
 description: Review or change report completion, PDF HTML generation, structured JSON export, sharing behavior, and exported status handling.
 effort: high
-allowed-tools: Read Grep Glob LS Bash Edit MultiEdit Write
 paths:
   - "app/report/**/*.tsx"
   - "src/pdf/**/*.ts"

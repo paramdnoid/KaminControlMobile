@@ -1,7 +1,7 @@
 ---
 description: Plan a KaminControlMobile feature or change. Use when work needs scope, architecture, handoffs, data/report/converter impact, or a decision-complete implementation path.
 effort: high
-allowed-tools: Read Grep Glob LS Bash
+disallowed-tools: Edit MultiEdit Write
 ---
 
 # Plan Feature

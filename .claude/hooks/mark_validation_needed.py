@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
+
+from validation_surfaces import empty_surfaces, git_changed_paths, surfaces_for_paths
 
 
 PROJECT_DIR = Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")).resolve()
@@ -39,6 +42,35 @@ def iter_paths(value: object) -> Iterable[str]:
                 yield from iter_paths(item)
 
 
+def command_from(payload: dict) -> str:
+    tool_input = payload.get("tool_input")
+    if isinstance(tool_input, dict):
+        command = tool_input.get("command")
+        if isinstance(command, str):
+            return command
+    command = payload.get("command")
+    return command if isinstance(command, str) else ""
+
+
+def command_may_modify_files(command: str) -> bool:
+    compact = re.sub(r"\s+", " ", command).strip()
+    if not compact:
+        return False
+    mutation_patterns = [
+        r"(^|[;&|]\s*)(cp|mv|rm|mkdir|touch)\b",
+        r"(^|[;&|]\s*)git\s+(add|commit|merge|rebase|cherry-pick|mv|rm|checkout|restore|stash)\b",
+        r"\bnpm\s+run\s+lint:fix\b",
+        r"\beslint\b.*\s--fix\b",
+        r"\bprettier\b.*\s(--write|-w)\b",
+        r"\bsed\b.*\s-i(\s|$)",
+        r"\bperl\b.*\s-pi\b",
+        r"(^|[;&|]\s*)tee\b",
+        r"(^|[;&|]\s*)(python3?|node|tsx|sh|bash|zsh)\b",
+        r"(^|[^<>])>>?\s*[^&\s]",
+    ]
+    return any(re.search(pattern, compact, flags=re.IGNORECASE) for pattern in mutation_patterns)
+
+
 def normalize(path: str, cwd: str) -> str:
     expanded = os.path.expanduser(path)
     try:
@@ -55,13 +87,7 @@ def load_state() -> dict:
     if not STATE_PATH.exists():
         return {
             "paths": [],
-            "surfaces": {
-                "config": False,
-                "app": False,
-                "converter": False,
-                "report": False,
-                "docs": False,
-            },
+            "surfaces": empty_surfaces(),
         }
     try:
         return json.loads(STATE_PATH.read_text(encoding="utf-8"))
@@ -69,30 +95,17 @@ def load_state() -> dict:
         return {"paths": [], "surfaces": {}}
 
 
-def classify(path: str) -> set[str]:
-    surfaces: set[str] = set()
-    if path == "CLAUDE.md" or path == ".gitignore" or path.startswith(".claude/"):
-        surfaces.add("config")
-    if path == "README.md" or path.startswith("docs/") or path.startswith(".claude/") or path == "CLAUDE.md":
-        surfaces.add("docs")
-    if (
-        path.startswith("app/")
-        or path.startswith("src/")
-        or path in {"package.json", "package-lock.json", "tsconfig.json", "app.json", "metro.config.js"}
-    ):
-        surfaces.add("app")
-    if path.startswith("desktop-converter/"):
-        surfaces.add("converter")
-    if path.startswith("src/pdf/") or path.startswith("app/report/"):
-        surfaces.add("report")
-    return surfaces
-
-
 def main() -> int:
     payload = read_payload()
     cwd = payload.get("cwd") if isinstance(payload.get("cwd"), str) else os.getcwd()
     tool_input = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else payload
-    changed = sorted({normalize(path, cwd) for path in iter_paths(tool_input)})
+    tool_name = payload.get("tool_name") if isinstance(payload.get("tool_name"), str) else ""
+    if tool_name == "Bash":
+        if not command_may_modify_files(command_from(payload)):
+            return 0
+        changed = sorted(git_changed_paths(PROJECT_DIR))
+    else:
+        changed = sorted({normalize(path, cwd) for path in iter_paths(tool_input)})
     if not changed:
         return 0
 
@@ -100,16 +113,10 @@ def main() -> int:
     state_paths = set(state.get("paths", []))
     state_paths.update(changed)
     surfaces = {
-        "config": False,
-        "app": False,
-        "converter": False,
-        "report": False,
-        "docs": False,
+        **empty_surfaces(),
         **state.get("surfaces", {}),
     }
-    for path in changed:
-        for surface in classify(path):
-            surfaces[surface] = True
+    surfaces.update({key: surfaces[key] or value for key, value in surfaces_for_paths(changed).items()})
 
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATE_PATH.write_text(

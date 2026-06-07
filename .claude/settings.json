@@ -12,9 +12,35 @@
       "Read(./**)",
       "Edit(./**)",
       "Write(./**)",
-      "Bash",
       "Glob",
-      "Grep"
+      "Grep",
+      "Bash(pwd)",
+      "Bash(ls *)",
+      "Bash(rg *)",
+      "Bash(nl *)",
+      "Bash(sed -n *)",
+      "Bash(wc *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git ls-files*)",
+      "Bash(npm start)",
+      "Bash(npm run android)",
+      "Bash(npm run ios)",
+      "Bash(npm run web)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run converter:typecheck)",
+      "Bash(npm run converter:test)",
+      "Bash(npm run converter:build)",
+      "Bash(npm run converter:start)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint:fix)",
+      "Bash(npm run claude:validate-settings)",
+      "Bash(npm run claude:test-hooks)",
+      "Bash(node .claude/hooks/validate_claude_settings_schema.cjs*)",
+      "Bash(python3 -m py_compile .claude/hooks/*.py)",
+      "Bash(python3 .claude/hooks/test_guards.py)"
     ],
     "deny": [
       "Read(./.env)",
@@ -129,7 +155,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|MultiEdit|Write",
+        "matcher": "Bash|Edit|MultiEdit|Write",
         "hooks": [
           {
             "type": "command",

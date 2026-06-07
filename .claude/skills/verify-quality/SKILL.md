@@ -1,7 +1,7 @@
 ---
 description: Verify KaminControlMobile changes. Use after edits or before commits to run the correct typecheck, converter tests/build, Claude config checks, hook simulations, and known manual checks.
 effort: medium
-allowed-tools: Read Grep Glob LS Bash
+disallowed-tools: Edit MultiEdit Write
 ---
 
 # Verify Quality

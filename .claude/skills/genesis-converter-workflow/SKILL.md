@@ -1,7 +1,6 @@
 ---
 description: Work on the Genesis desktop converter, MDB/ZIP mapping, mobile bundle shape, converter audit output, and converter tests/build.
 effort: high
-allowed-tools: Read Grep Glob LS Bash Edit MultiEdit Write
 paths:
   - "desktop-converter/**/*"
   - "src/types.ts"

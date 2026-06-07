@@ -20,6 +20,8 @@
 
 - Prefer hooks/settings for deterministic enforcement.
 - Keep root files and directory names covered, not only nested `/**` globs.
+- Keep shared Bash permissions narrow; broad local convenience belongs in `.claude/settings.local.json` and should still be guarded by hooks.
+- Keep planning, verification, diff-review, and security skills read-only with `disallowed-tools: Edit MultiEdit Write`.
 - Keep user output minimal when sensitive data is involved.
 - Do not commit local artifacts or generated customer data.
 - Make artifact access explicit when the user asks for it.
