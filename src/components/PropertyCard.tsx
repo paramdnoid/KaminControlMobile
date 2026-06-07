@@ -22,19 +22,20 @@ export function PropertyCard({ property, onOpen, onCreateReport }: Props) {
 
   return (
     <View
-      className="bg-surface rounded-md border border-border overflow-hidden"
+      className="bg-surface rounded-lg border border-border overflow-hidden"
       style={shadow.card}
     >
       {/* Tap to navigate → property detail */}
       <Pressable
         accessibilityRole="button"
         onPress={onOpen}
-        className="p-3 gap-2"
+        className="p-3.5 gap-2"
         style={({ pressed }) => pressed ? { opacity: 0.7 } : undefined}
       >
-        <View className="flex-row items-center gap-2">
+        <View className="flex-row items-center gap-2.5">
+          <View className="w-1 self-stretch rounded-full bg-primary-soft" />
           <View className="flex-1 gap-0.5">
-            <Text className="text-base font-bold text-ink leading-[22px]" numberOfLines={1}>
+            <Text className="text-h3 font-bold text-ink" numberOfLines={1}>
               {property.propertyLabel || property.street || 'Liegenschaft'}
             </Text>
             <Text className="text-small text-muted leading-[18px]" numberOfLines={1}>
@@ -42,7 +43,9 @@ export function PropertyCard({ property, onOpen, onCreateReport }: Props) {
               {joinAddress(property.street, property.postalCode, property.city)}
             </Text>
           </View>
-          <ChevronRight color={colors.mutedLight} size={18} strokeWidth={2} />
+          <View className="w-7 h-7 items-center justify-center rounded-full bg-surface-muted">
+            <ChevronRight color={colors.muted} size={16} strokeWidth={2.5} />
+          </View>
         </View>
 
         {hasTags ? (
@@ -77,12 +80,12 @@ export function PropertyCard({ property, onOpen, onCreateReport }: Props) {
       </Pressable>
 
       {/* Action row — visually lighter, clearly subordinate */}
-      <View className="border-t border-divider">
+      <View className="border-t border-divider bg-surface-raised">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Rapport starten"
           onPress={onCreateReport}
-          className="flex-row items-center gap-1.5 px-3 py-2.5"
+          className="flex-row items-center gap-1.5 px-3.5 py-3"
           style={({ pressed }) => pressed ? { opacity: 0.6 } : undefined}
         >
           <FilePlus2 color={colors.primary} size={14} strokeWidth={2} />

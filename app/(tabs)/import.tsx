@@ -4,16 +4,16 @@ import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
 import { CheckCircle2, Database, FileJson2, FileSpreadsheet, UploadCloud } from 'lucide-react-native';
 
-import { Button } from '../src/components/Button';
-import { Card } from '../src/components/Card';
-import { Screen } from '../src/components/Screen';
-import { SectionHeader } from '../src/components/SectionHeader';
-import { importGenesisBundle, upsertImportedProperties } from '../src/data/database';
-import { parseGenesisBundleAsset } from '../src/import/genesisBundle';
-import { IMPORT_TEMPLATE_HEADERS, parseImportAsset } from '../src/import/importer';
-import { colors } from '../src/theme/theme';
-import type { GenesisBundlePreview, GenesisImportResult, ImportPreview, ImportResult } from '../src/types';
-import { joinAddress } from '../src/utils/text';
+import { Button } from '../../src/components/Button';
+import { Card } from '../../src/components/Card';
+import { Screen } from '../../src/components/Screen';
+import { SectionHeader } from '../../src/components/SectionHeader';
+import { importGenesisBundle, upsertImportedProperties } from '../../src/data/database';
+import { parseGenesisBundleAsset } from '../../src/import/genesisBundle';
+import { IMPORT_TEMPLATE_HEADERS, parseImportAsset } from '../../src/import/importer';
+import { colors } from '../../src/theme/theme';
+import type { GenesisBundlePreview, GenesisImportResult, ImportPreview, ImportResult } from '../../src/types';
+import { joinAddress } from '../../src/utils/text';
 
 export default function ImportScreen() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);

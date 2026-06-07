@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import type { ReactNode } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { FilePlus2, FileText, Share2 } from 'lucide-react-native';
@@ -9,6 +10,7 @@ import { Card } from '../../src/components/Card';
 import { ReportCard } from '../../src/components/ReportCard';
 import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
+import { SegmentedTabs } from '../../src/components/SegmentedTabs';
 import {
   createReport,
   getGenesisContext,
@@ -24,6 +26,8 @@ import { colors } from '../../src/theme/theme';
 import type { CustomerProperty, GenesisPropertyContext, ReportBundle } from '../../src/types';
 import { joinAddress } from '../../src/utils/text';
 
+type TabKey = 'details' | 'genesis' | 'reports';
+
 export default function PropertyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [property, setProperty] = useState<CustomerProperty | null>(null);
@@ -31,6 +35,7 @@ export default function PropertyDetailScreen() {
   const [reports, setReports] = useState<ReportBundle[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [tab, setTab] = useState<TabKey>('details');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -47,6 +52,26 @@ export default function PropertyDetailScreen() {
   }, [id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const hasGenesis = useMemo(() => {
+    if (!genesisContext) return false;
+    return (
+      genesisContext.installations.length > 0 ||
+      genesisContext.invoices.length > 0 ||
+      genesisContext.objectTariffSuggestions.length > 0 ||
+      genesisContext.arbvolSummary.length > 0 ||
+      genesisContext.history.length > 0
+    );
+  }, [genesisContext]);
+
+  const tabs = useMemo(() => {
+    const list: { key: TabKey; label: string }[] = [{ key: 'details', label: 'Details' }];
+    if (hasGenesis) list.push({ key: 'genesis', label: 'Genesis' });
+    list.push({ key: 'reports', label: `Rapporte${reports.length ? ` (${reports.length})` : ''}` });
+    return list;
+  }, [hasGenesis, reports.length]);
+
+  const activeTab: TabKey = tabs.some((t) => t.key === tab) ? tab : 'details';
 
   async function startReport() {
     if (!property) return;
@@ -98,48 +123,64 @@ export default function PropertyDetailScreen() {
         <Button label="Rapport starten" icon={FilePlus2} loading={creating} onPress={startReport} variant="primary" />
       }
     >
-      <SectionHeader title="Stammdaten" meta={property.customerNumber ? `Nr. ${property.customerNumber}` : undefined} />
-      <Card>
-        <Info label="Quelle"              value={property.sourceSystem === 'genesis' ? `Genesis ${property.sourceKey || ''}` : 'Manuell'} />
-        <Info label="Status"             value={property.isActive === false ? 'Inaktiv im letzten Genesis-Import' : 'Aktiv'} />
-        <Info label="Gebäudeart"         value={displayBuildingType(property.buildingType, property.otherBuildingType)} />
-        <Info label="Rechnungsadresse"   value={displayAddressRole(property.billingRole)} />
-        <Info label="Avisierungsadr."    value={displayAddressRole(property.notificationRole)} />
-      </Card>
+      <SegmentedTabs
+        options={tabs}
+        value={activeTab}
+        onChange={(key) => setTab(key as TabKey)}
+      />
 
-      <SectionHeader title="Kontaktrollen" />
-      <Card>
-        <Info label="Eigentümer" value={property.owner}      multiline />
-        <Info label="Mieter"     value={property.tenant}     multiline />
-        <Info label="Verwaltung" value={property.management} multiline />
-        <Info label="Hauswart"   value={property.caretaker}  multiline />
-      </Card>
+      {activeTab === 'details' ? (
+        <>
+          <SectionHeader title="Stammdaten" meta={property.customerNumber ? `Nr. ${property.customerNumber}` : undefined} />
+          <Card>
+            <Grid>
+              <Cell label="Quelle"            value={property.sourceSystem === 'genesis' ? `Genesis ${property.sourceKey || ''}` : 'Manuell'} />
+              <Cell label="Status"            value={property.isActive === false ? 'Inaktiv' : 'Aktiv'} />
+              <Cell label="Gebäudeart"        value={displayBuildingType(property.buildingType, property.otherBuildingType)} />
+              <Cell label="Rechnungsadresse"  value={displayAddressRole(property.billingRole)} />
+              <Cell label="Avisierungsadr."   value={displayAddressRole(property.notificationRole)} />
+            </Grid>
+          </Card>
 
-      <SectionHeader title="Feuerung und Tour" />
-      <Card>
-        <Info label="Brennstoff"         value={displayFuelTypes(property.fuelTypes)} />
-        <Info label="Anlagen"            value={property.fireSystemCodes.join(', ') || '-'} />
-        <Info label="Ölheizung Kessel"   value={property.oilBoiler} />
-        <Info label="kWh"                value={property.kwh} />
-        <Info label="Baujahr"            value={property.buildYear} />
-        <Info label="Tour"               value={property.tour} />
-        <Info label="Reinigungsmonate"   value={property.cleaningMonths.join(', ') || '-'} />
-      </Card>
+          <SectionHeader title="Kontaktrollen" />
+          <Card>
+            <Info label="Eigentümer" value={property.owner}      multiline />
+            <Info label="Mieter"     value={property.tenant}     multiline />
+            <Info label="Verwaltung" value={property.management} multiline />
+            <Info label="Hauswart"   value={property.caretaker}  multiline />
+          </Card>
 
-      {genesisContext ? (
+          <SectionHeader title="Feuerung und Tour" />
+          <Card>
+            <Grid>
+              <Cell label="Brennstoff"       value={displayFuelTypes(property.fuelTypes)} />
+              <Cell label="Anlagen"          value={property.fireSystemCodes.join(', ') || '-'} />
+              <Cell label="Ölheizung Kessel" value={property.oilBoiler} />
+              <Cell label="kWh"              value={property.kwh} />
+              <Cell label="Baujahr"          value={property.buildYear} />
+              <Cell label="Tour"             value={property.tour} />
+              <Cell label="Reinigungsmonate" value={property.cleaningMonths.join(', ') || '-'} />
+            </Grid>
+          </Card>
+        </>
+      ) : null}
+
+      {activeTab === 'genesis' && genesisContext ? (
         <>
           <SectionHeader
             title="Genesis-Kontext"
             meta={genesisContext.importRun ? `Import ${new Date(genesisContext.importRun.importedAt).toLocaleDateString('de-CH')}` : undefined}
           />
           <Card>
-            <Info label="Anlagen"            value={`${genesisContext.installations.length}`} />
-            <Info label="Objekttarife"       value={`${genesisContext.objectTariffSuggestions.length}`} />
-            <Info label="Rechnungsvorschl."  value={`${genesisContext.invoiceLineSuggestions.length}`} />
-            <Info label="Rechnungen"         value={`${genesisContext.invoices.length}`} />
-            <Info label="PDFs"               value={`${genesisContext.pdfDocuments.length}`} />
-            <Info label="Arbeitsvolumen"     value={`${genesisContext.arbvolSummary.length}`} />
-            <Info label="Historie"           value={`${genesisContext.history.length}`} />
+            <Grid>
+              <Cell label="Anlagen"           value={`${genesisContext.installations.length}`} />
+              <Cell label="Objekttarife"      value={`${genesisContext.objectTariffSuggestions.length}`} />
+              <Cell label="Rechnungsvorschl." value={`${genesisContext.invoiceLineSuggestions.length}`} />
+              <Cell label="Rechnungen"        value={`${genesisContext.invoices.length}`} />
+              <Cell label="PDFs"              value={`${genesisContext.pdfDocuments.length}`} />
+              <Cell label="Arbeitsvolumen"    value={`${genesisContext.arbvolSummary.length}`} />
+              <Cell label="Historie"          value={`${genesisContext.history.length}`} />
+            </Grid>
           </Card>
 
           {genesisContext.installations.length ? (
@@ -188,16 +229,16 @@ export default function PropertyDetailScreen() {
                           <Button label="PDF" icon={Share2} onPress={() => openPdf(documents[0].localUri)} variant="secondary" />
                         ) : null}
                       </View>
-                      <View className="flex-row flex-wrap gap-3">
-                        <Info label="Arbeitsdatum"   value={invoice.workDate} />
-                        <Info label="Rechnungsdatum" value={invoice.invoiceDate} />
-                        <Info label="Fällig"         value={invoice.dueDate} />
-                        <Info label="Bezahlt"        value={invoice.paidDate} />
-                        <Info label="Netto"          value={invoice.netAmount ? `CHF ${invoice.netAmount}` : ''} />
-                        <Info label="MWST"           value={invoice.vatAmount ? `CHF ${invoice.vatAmount}` : ''} />
-                        <Info label="Bezahlt Betrag" value={invoice.paidAmount ? `CHF ${invoice.paidAmount}` : ''} />
-                        <Info label="Mahnstufe"      value={invoice.dunningLevel} />
-                      </View>
+                      <Grid>
+                        <Cell label="Arbeitsdatum"   value={invoice.workDate} />
+                        <Cell label="Rechnungsdatum" value={invoice.invoiceDate} />
+                        <Cell label="Fällig"         value={invoice.dueDate} />
+                        <Cell label="Bezahlt"        value={invoice.paidDate} />
+                        <Cell label="Netto"          value={invoice.netAmount ? `CHF ${invoice.netAmount}` : ''} />
+                        <Cell label="MWST"           value={invoice.vatAmount ? `CHF ${invoice.vatAmount}` : ''} />
+                        <Cell label="Bezahlt Betrag" value={invoice.paidAmount ? `CHF ${invoice.paidAmount}` : ''} />
+                        <Cell label="Mahnstufe"      value={invoice.dunningLevel} />
+                      </Grid>
                       <Info label="Rechnungsadresse"          value={invoice.invoiceAddress}  multiline />
                       {invoice.propertyAddress ? <Info label="Liegenschaft auf Rechnung" value={invoice.propertyAddress} multiline /> : null}
                       {lines.length ? (
@@ -291,31 +332,48 @@ export default function PropertyDetailScreen() {
         </>
       ) : null}
 
-      <SectionHeader title="Rapporte" meta={`${reports.length} lokal gespeichert`} />
-      {reports.length ? (
-        <View className="gap-2">
-          {reports.map((bundle) => (
-            <ReportCard
-              key={bundle.report.id}
-              bundle={bundle}
-              onOpen={() => router.push({ pathname: '/report/[id]', params: { id: bundle.report.id } })}
-            />
-          ))}
-        </View>
-      ) : (
-        <Card>
-          <Text className="text-base text-muted leading-6">Für diese Liegenschaft ist noch kein Rapport vorhanden.</Text>
-        </Card>
-      )}
+      {activeTab === 'reports' ? (
+        <>
+          <SectionHeader title="Rapporte" meta={`${reports.length} lokal gespeichert`} />
+          {reports.length ? (
+            <View className="gap-2">
+              {reports.map((bundle) => (
+                <ReportCard
+                  key={bundle.report.id}
+                  bundle={bundle}
+                  onOpen={() => router.push({ pathname: '/report/[id]', params: { id: bundle.report.id } })}
+                />
+              ))}
+            </View>
+          ) : (
+            <Card>
+              <Text className="text-base text-muted leading-6">Für diese Liegenschaft ist noch kein Rapport vorhanden.</Text>
+            </Card>
+          )}
+        </>
+      ) : null}
     </Screen>
+  );
+}
+
+function Grid({ children }: { children: ReactNode }) {
+  return <View className="flex-row flex-wrap gap-y-3 gap-x-4">{children}</View>;
+}
+
+function Cell({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="w-[47%] gap-0.5">
+      <Text className="text-eyebrow font-semibold text-muted-light uppercase">{label}</Text>
+      <Text className="text-base font-medium text-ink leading-5">{value || '-'}</Text>
+    </View>
   );
 }
 
 function Info({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
   return (
     <View className="gap-0.5">
-      <Text className="text-xs font-semibold text-muted-light uppercase tracking-wide">{label}</Text>
-      <Text className={`text-base font-medium text-ink ${multiline ? 'leading-6' : 'leading-[22px]'}`}>{value || '-'}</Text>
+      <Text className="text-eyebrow font-semibold text-muted-light uppercase">{label}</Text>
+      <Text className={`text-base font-medium text-ink ${multiline ? 'leading-5' : 'leading-[22px]'}`}>{value || '-'}</Text>
     </View>
   );
 }

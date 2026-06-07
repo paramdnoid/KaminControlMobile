@@ -1,13 +1,30 @@
 import '../global.css';
 
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { router, Stack } from 'expo-router';
+import { ChevronLeft } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { initDatabase } from '../src/data/database';
 import { colors } from '../src/theme/theme';
+
+function HeaderBack() {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Zurück"
+      hitSlop={10}
+      onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+      className="flex-row items-center gap-0.5 -ml-1 pr-3 py-1"
+      style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}
+    >
+      <ChevronLeft color={colors.primary} size={26} strokeWidth={2.25} />
+      <Text className="text-base font-semibold text-primary">Zurück</Text>
+    </Pressable>
+  );
+}
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -49,11 +66,11 @@ export default function RootLayout() {
           headerShadowVisible: false,
           headerTintColor: colors.primary,
           headerTitleStyle: { fontWeight: '700' },
+          headerBackVisible: false,
+          headerLeft: () => <HeaderBack />,
         }}
       >
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="import" options={{ title: 'Import' }} />
-        <Stack.Screen name="reports" options={{ title: 'Rapporte' }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="property/[id]" options={{ title: 'Liegenschaft' }} />
         <Stack.Screen name="report/[id]" options={{ title: 'Rapport' }} />
       </Stack>

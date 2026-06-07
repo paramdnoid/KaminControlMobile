@@ -47,7 +47,7 @@ export function ReportCard({ bundle, onOpen }: Props) {
     <Pressable
       accessibilityRole="button"
       onPress={onOpen}
-      className="bg-surface rounded-md border border-border p-3"
+      className="bg-surface rounded-lg border border-border p-3.5"
       style={({ pressed }) => [shadow.card, pressed ? { opacity: 0.75 } : undefined]}
     >
       <View className="flex-row items-center gap-3">

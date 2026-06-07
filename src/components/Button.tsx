@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 
-import { colors } from '../theme/theme';
+import { colors, shadow } from '../theme/theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
@@ -18,7 +18,7 @@ type Props = {
 
 const variantClass: Record<ButtonVariant, string> = {
   primary:   'bg-primary',
-  secondary: 'bg-primary-soft border border-primary',
+  secondary: 'bg-surface border border-primary/30',
   ghost:     'bg-transparent border border-border',
   danger:    'bg-danger',
 };
@@ -53,11 +53,17 @@ export function Button({
       disabled={disabled || loading}
       onPress={onPress}
       className={[
-        'flex-row items-center justify-center rounded-md min-h-[48px] px-4 py-3 gap-2',
+        'flex-row items-center justify-center rounded-lg min-h-[52px] px-4 py-3.5 gap-2',
         variantClass[variant],
         disabled ? 'opacity-40' : '',
       ].join(' ')}
-      style={({ pressed }) => pressed && !disabled ? { opacity: 0.78, transform: [{ scale: 0.98 }] } : undefined}
+      style={({ pressed }) => {
+        const lift = variant === 'primary' || variant === 'danger' ? shadow.brand : undefined;
+        if (pressed && !disabled) {
+          return { opacity: 0.9, transform: [{ scale: 0.98 }] };
+        }
+        return disabled ? undefined : lift;
+      }}
     >
       {loading ? (
         <ActivityIndicator color={iconColor[variant]} />

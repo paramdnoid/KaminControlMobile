@@ -13,7 +13,7 @@ export function Card({ children, compact = false, elevated = false }: Props) {
   return (
     <View
       className={[
-        'bg-surface rounded-md border border-border',
+        'bg-surface rounded-lg border border-border',
         compact ? 'p-3 gap-3' : 'p-4 gap-3',
         elevated ? 'border-0' : '',
       ].join(' ')}
