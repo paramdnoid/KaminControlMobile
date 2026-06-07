@@ -2,13 +2,13 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 
-import { Card } from '../src/components/Card';
-import { Chips } from '../src/components/Chips';
-import { ReportCard } from '../src/components/ReportCard';
-import { Screen } from '../src/components/Screen';
-import { listReports } from '../src/data/database';
-import { colors } from '../src/theme/theme';
-import type { ReportBundle, ReportStatus } from '../src/types';
+import { Card } from '../../src/components/Card';
+import { Chips } from '../../src/components/Chips';
+import { ReportCard } from '../../src/components/ReportCard';
+import { Screen } from '../../src/components/Screen';
+import { listReports } from '../../src/data/database';
+import { colors } from '../../src/theme/theme';
+import type { ReportBundle, ReportStatus } from '../../src/types';
 
 const filters: Array<{ value: ReportStatus | 'all'; label: string }> = [
   { value: 'all',       label: 'Alle' },

@@ -3,12 +3,16 @@
  * Layout/typography/spacing are handled by NativeWind (Tailwind) classes.
  */
 export const colors = {
-  background:   '#F5F2EC',
+  background:   '#F2EFE8',
   surface:      '#FFFFFF',
-  muted:        '#6E665E',
-  mutedLight:   '#A39990',
-  primary:      '#1E4E46',
-  accent:       '#B65F2A',
+  ink:          '#1A1613',
+  border:       '#E3DCD0',
+  divider:      '#EDE7DD',
+  muted:        '#6B635A',
+  mutedLight:   '#A89E93',
+  primary:      '#16453D',
+  primarySoft:  '#DBEAE4',
+  accent:       '#BC6230',
   success:      '#2D6A4F',
   danger:       '#9F2D2D',
   info:         '#275C7D',
@@ -21,17 +25,24 @@ export const colors = {
  */
 export const shadow = {
   card: {
-    shadowColor: '#1C1917',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowColor: '#3A2E1F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   elevated: {
-    shadowColor: '#1C1917',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.11,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowColor: '#2A2113',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  brand: {
+    shadowColor: '#0F312B',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 6,
   },
 } as const;

@@ -1,15 +1,23 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Text, TextInput, View } from 'react-native';
-import { FileSpreadsheet, ListChecks, Search } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import {
+  CheckCircle2,
+  Database,
+  FilePlus2,
+  FileSpreadsheet,
+  Search,
+  Share2,
+} from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 
-import { Button } from '../src/components/Button';
-import { Card } from '../src/components/Card';
-import { PropertyCard } from '../src/components/PropertyCard';
-import { Screen } from '../src/components/Screen';
-import { createReport, getDashboardStats, listProperties } from '../src/data/database';
-import { colors, shadow } from '../src/theme/theme';
-import type { CustomerProperty, DashboardStats } from '../src/types';
+import { Button } from '../../src/components/Button';
+import { Card } from '../../src/components/Card';
+import { PropertyCard } from '../../src/components/PropertyCard';
+import { Screen } from '../../src/components/Screen';
+import { createReport, getDashboardStats, listProperties } from '../../src/data/database';
+import { colors, shadow } from '../../src/theme/theme';
+import type { CustomerProperty, DashboardStats } from '../../src/types';
 
 export default function HomeScreen() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -51,59 +59,37 @@ export default function HomeScreen() {
   }
 
   return (
-    <Screen title="KaminControl" subtitle={subtitle}>
-      {/* Primary actions */}
-      <View className="flex-row flex-wrap gap-2">
-        <View className="flex-1 min-w-[140px]">
-          <Button
-            label="Stammdaten importieren"
-            icon={FileSpreadsheet}
-            onPress={() => router.push('/import')}
-            variant="primary"
-          />
+    <Screen eyebrow="Kaminfeger-Rapporte" title="KaminControl" subtitle={subtitle}>
+      {/* Stats — single unified panel, 2×2 with dividers */}
+      <View
+        className="bg-surface rounded-lg border border-border overflow-hidden"
+        style={shadow.card}
+      >
+        <View className="flex-row">
+          <Stat icon={Database} label="Genesis-Importe" value={stats?.genesisImports ?? 0} />
+          <View className="w-px bg-divider" />
+          <Stat icon={FilePlus2} label="Entwürfe" value={stats?.drafts ?? 0} />
         </View>
-        <View className="flex-1 min-w-[140px]">
-          <Button
-            label="Rapporte"
-            icon={ListChecks}
-            onPress={() => router.push('/reports')}
-            variant="secondary"
-          />
-        </View>
-      </View>
-
-      {/* Stats — guaranteed 2×2 grid */}
-      <View className="gap-2">
-        <View className="flex-row gap-2">
-          <View className="flex-1">
-            <Stat label="Genesis-Importe" value={stats?.genesisImports ?? 0} />
-          </View>
-          <View className="flex-1">
-            <Stat label="Entwürfe" value={stats?.drafts ?? 0} />
-          </View>
-        </View>
-        <View className="flex-row gap-2">
-          <View className="flex-1">
-            <Stat label="Abgeschlossen" value={stats?.completed ?? 0} />
-          </View>
-          <View className="flex-1">
-            <Stat label="Exportiert" value={stats?.exported ?? 0} />
-          </View>
+        <View className="h-px bg-divider" />
+        <View className="flex-row">
+          <Stat icon={CheckCircle2} label="Abgeschlossen" value={stats?.completed ?? 0} />
+          <View className="w-px bg-divider" />
+          <Stat icon={Share2} label="Exportiert" value={stats?.exported ?? 0} />
         </View>
       </View>
 
       {/* Search bar */}
       <View
-        className="flex-row items-center gap-2 bg-surface rounded-md border border-border min-h-[48px] px-3"
+        className="flex-row items-center gap-2.5 bg-surface rounded-lg border border-border min-h-[52px] px-4"
         style={shadow.card}
       >
-        <Search color={colors.mutedLight} size={18} strokeWidth={2} />
+        <Search color={colors.mutedLight} size={18} strokeWidth={2.5} />
         <TextInput
           accessibilityLabel="Liegenschaften suchen"
           onChangeText={(value) => { setQuery(value); load(value); }}
           placeholder="Kundennummer, Ort, Strasse, Name"
           placeholderTextColor={colors.mutedLight}
-          className="flex-1 text-base text-ink min-h-[48px]"
+          className="flex-1 text-base text-ink min-h-[52px]"
           value={query}
         />
       </View>
@@ -114,7 +100,7 @@ export default function HomeScreen() {
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : properties.length ? (
-        <View className="gap-2">
+        <View className="gap-2.5">
           {properties.map((property) => (
             <PropertyCard
               key={property.id}
@@ -129,6 +115,9 @@ export default function HomeScreen() {
         </View>
       ) : (
         <Card>
+          <View className="w-12 h-12 items-center justify-center rounded-full bg-primary-soft">
+            <FileSpreadsheet color={colors.primary} size={22} strokeWidth={2} />
+          </View>
           <Text className="text-h3 font-bold text-ink">Keine Liegenschaften gefunden</Text>
           <Text className="text-base text-muted leading-6">
             Importiere eine CSV/XLSX-Datei oder ein Genesis-Bundle mit Kundennummer und Liegenschaftsadresse.
@@ -145,15 +134,16 @@ export default function HomeScreen() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
   return (
-    <Card compact>
-      <Text className="text-display font-extrabold text-primary text-center tracking-tighter leading-9">
+    <View className="flex-1 items-center gap-1 py-5 px-2">
+      <Icon color={colors.mutedLight} size={17} strokeWidth={2} />
+      <Text className="text-display font-extrabold text-primary text-center tracking-tighter">
         {value}
       </Text>
-      <Text className="text-small font-medium text-muted text-center leading-[18px]">
+      <Text className="text-eyebrow font-semibold text-muted text-center uppercase">
         {label}
       </Text>
-    </Card>
+    </View>
   );
 }
