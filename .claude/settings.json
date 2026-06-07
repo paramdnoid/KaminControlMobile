@@ -35,7 +35,6 @@
       "Bash(npm run converter:build)",
       "Bash(npm run converter:start)",
       "Bash(npm run lint)",
-      "Bash(npm run lint:fix)",
       "Bash(npm run claude:validate-settings)",
       "Bash(npm run claude:test-hooks)",
       "Bash(node .claude/hooks/validate_claude_settings_schema.cjs*)",

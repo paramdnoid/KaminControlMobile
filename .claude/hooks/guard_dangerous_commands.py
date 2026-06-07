@@ -30,6 +30,11 @@ BLOCKED_REGEXES = [
     (r"\b(curl|wget)\b.*\|\s*(sh|bash|zsh)\b", "remote shell pipe"),
 ]
 
+MUTATING_SEGMENT_RE = re.compile(r"(^|[;&|]{1,2}\s*)(cp|mv|rm|mkdir|touch|tee)\b", re.IGNORECASE)
+WRITE_REDIRECT_RE = re.compile(r"(^|[^<])(?P<operator>>>?|[12]>)\s*(?P<target>(?!&)[^\s]+)")
+TEMP_WRITE_PREFIXES = (".claude/tmp/",)
+SCREENSHOT_DIR = ".claude/tmp/screenshots/"
+
 
 def deny(reason: str) -> int:
     print(
@@ -66,11 +71,71 @@ def command_from(payload: dict) -> str:
     return command if isinstance(command, str) else ""
 
 
-def command_mentions_sensitive_path(command: str) -> str | None:
+def shell_parts(command: str) -> list[str]:
     try:
-        parts = shlex.split(command)
+        return shlex.split(command)
     except ValueError:
-        parts = command.split()
+        return command.split()
+
+
+def normalize_shell_path(path: str) -> str:
+    return strip_current_dir_prefix(path.strip("'\""))
+
+
+def is_temp_screenshot_target(path: str) -> bool:
+    normalized = normalize_shell_path(path)
+    return normalized in {
+        ".claude/tmp/screenshots",
+        ".claude/tmp/screenshots/*",
+        ".claude/tmp/screenshots/*.png",
+    } or normalized.startswith(SCREENSHOT_DIR)
+
+
+def is_allowed_temp_command(command: str) -> bool:
+    parts = shell_parts(command)
+    if not parts:
+        return False
+
+    executable = parts[0]
+    if executable == "rm":
+        targets = [part for part in parts[1:] if not part.startswith("-")]
+        options = [part for part in parts[1:] if part.startswith("-")]
+        return bool(targets) and all(option in {"-f", "--force"} for option in options) and all(
+            is_temp_screenshot_target(target) for target in targets
+        )
+
+    if executable == "mkdir":
+        targets = [part for part in parts[1:] if not part.startswith("-")]
+        options = [part for part in parts[1:] if part.startswith("-")]
+        return bool(targets) and all(option in {"-p", "--parents"} for option in options) and all(
+            is_temp_screenshot_target(target) for target in targets
+        )
+
+    return False
+
+
+def command_mentions_mutating_segment(command: str) -> str | None:
+    if is_allowed_temp_command(command):
+        return None
+
+    compact = re.sub(r"\s+", " ", command).strip()
+    match = MUTATING_SEGMENT_RE.search(compact)
+    if match:
+        return match.group(2)
+    return None
+
+
+def command_writes_outside_temp(command: str) -> str | None:
+    for match in WRITE_REDIRECT_RE.finditer(command):
+        target = normalize_shell_path(match.group("target"))
+        if target.startswith(TEMP_WRITE_PREFIXES):
+            continue
+        return target
+    return None
+
+
+def command_mentions_sensitive_path(command: str) -> str | None:
+    parts = shell_parts(command)
 
     candidates = []
     for part in parts:
@@ -99,6 +164,14 @@ def main() -> int:
     for pattern, reason in BLOCKED_REGEXES:
         if re.search(pattern, compact, flags=re.IGNORECASE):
             return deny(f"Blocked dangerous command ({reason}): {compact}")
+
+    mutating_segment = command_mentions_mutating_segment(command)
+    if mutating_segment:
+        return deny(f"Blocked mutating shell segment ({mutating_segment}): {compact}")
+
+    write_target = command_writes_outside_temp(command)
+    if write_target:
+        return deny(f"Blocked shell write redirection outside .claude/tmp: {write_target}")
 
     sensitive = command_mentions_sensitive_path(command)
     if sensitive:

@@ -40,10 +40,10 @@ SENSITIVE_GLOBS = [
     "2026-06-01 - Sicherung Genesis - KOMPLETT - 001.zip",
 ]
 
-# UI screenshots are allowed for cleanup/review commands; generated data is not.
+# UI screenshots belong in .claude/tmp/screenshots; generated data is not.
 ALLOWED_GLOBS = [
-    "artifacts/*.png",
-    "artifacts/**/*.png",
+    ".claude/tmp/screenshots/*.png",
+    ".claude/tmp/screenshots/**/*.png",
 ]
 
 

@@ -15,7 +15,7 @@ from validation_surfaces import empty_surfaces, git_changed_paths, surfaces_for_
 
 PROJECT_DIR = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd())).resolve()
 STATE_PATH = PROJECT_DIR / ".claude/tmp/validation-needed.json"
-READ_ONLY_SKILLS = {"diff-review", "plan-feature", "security-privacy-check", "verify-quality"}
+READ_ONLY_SKILLS = {"diff-review", "plan-feature", "security-privacy-check", "ship-check", "verify-quality"}
 
 
 def run(command: list[str], timeout: int = 120) -> tuple[bool, str]:
