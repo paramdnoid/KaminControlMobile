@@ -28,12 +28,13 @@ export function PropertyCard({ property, onOpen, onCreateReport }: Props) {
       {/* Tap to navigate → property detail */}
       <Pressable
         accessibilityRole="button"
+        accessibilityLabel={[property.propertyLabel || property.street, property.customerNumber ? `Nr. ${property.customerNumber}` : ''].filter(Boolean).join(', ') || 'Liegenschaft öffnen'}
         onPress={onOpen}
         className="p-3.5 gap-2"
         style={({ pressed }) => pressed ? { opacity: 0.7 } : undefined}
       >
         <View className="flex-row items-center gap-2.5">
-          <View className="w-1 self-stretch rounded-full bg-primary-soft" />
+          <View className="w-1.5 self-stretch rounded-full bg-primary-soft" />
           <View className="flex-1 gap-0.5">
             <Text className="text-h3 font-bold text-ink" numberOfLines={1}>
               {property.propertyLabel || property.street || 'Liegenschaft'}

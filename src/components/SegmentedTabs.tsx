@@ -25,7 +25,7 @@ export function SegmentedTabs({ options, value, onChange }: Props) {
             accessibilityState={{ selected: active }}
             accessibilityLabel={option.label}
             onPress={() => onChange(option.key)}
-            className={`flex-1 items-center justify-center rounded-md min-h-[36px] px-2 ${active ? 'bg-surface' : ''}`}
+            className={`flex-1 items-center justify-center rounded-md min-h-[44px] px-2 ${active ? 'bg-surface' : ''}`}
             style={active ? shadow.card : undefined}
           >
             <Text

@@ -17,10 +17,12 @@ function row(label: string, value: string): string {
 }
 
 function multiline(label: string, value: string): string {
+  // Strip \r so Windows/MDB line endings (\r\n) don't appear as literal characters in HTML.
+  const normalised = (value || '-').replace(/\r/g, '');
   return `
     <div class="multiline">
       <span>${escapeHtml(label)}</span>
-      <p>${escapeHtml(value || '-').replace(/\n/g, '<br />')}</p>
+      <p>${escapeHtml(normalised).replace(/\n/g, '<br />')}</p>
     </div>
   `;
 }
@@ -51,10 +53,16 @@ function printReportHtmlOnWeb(html: string): Promise<void> {
         return;
       }
 
+      // 100 ms: wait for the iframe DOM to finish rendering before calling print().
       window.setTimeout(() => {
         try {
           printWindow.focus();
           printWindow.print();
+          // 1 000 ms: the browser print dialog is synchronous on most browsers,
+          // but some fire the onload before resources (fonts/images) are fully
+          // available. The delay lets the print job flush before we remove the
+          // iframe. This is a known Expo web platform limitation; there is no
+          // reliable afterprint event across all browsers.
           window.setTimeout(() => {
             document.body.removeChild(frame);
             resolve();
@@ -71,11 +79,11 @@ function printReportHtmlOnWeb(html: string): Promise<void> {
   });
 }
 
-export function buildStructuredReport(bundle: ReportBundle): string {
+export function buildStructuredReport(bundle: ReportBundle, exportedAt: string = new Date().toISOString()): string {
   return JSON.stringify(
     {
       schema: 'kamincontrolmobile.report.v1',
-      exportedAt: new Date().toISOString(),
+      exportedAt,
       property: bundle.property,
       report: bundle.report,
       workItems: bundle.workItems,
@@ -298,21 +306,26 @@ export async function createReportPdf(bundle: ReportBundle): Promise<string> {
   return uri;
 }
 
-export async function shareReportPdf(bundle: ReportBundle): Promise<string> {
+// 'printed': handed to the web print dialog. 'shared': passed to the native share
+// sheet. 'saved': PDF created but sharing unavailable on this device — caller must
+// tell the user the file was not handed off.
+export type ShareOutcome = { method: 'printed' | 'shared' | 'saved'; uri: string };
+
+export async function shareReportPdf(bundle: ReportBundle): Promise<ShareOutcome> {
   const uri = await createReportPdf(bundle);
   if (!uri) {
-    return uri;
+    return { method: 'printed', uri: '' };
   }
 
   const available = await Sharing.isAvailableAsync();
-
-  if (available) {
-    await Sharing.shareAsync(uri, {
-      mimeType: 'application/pdf',
-      dialogTitle: 'Rapport teilen',
-      UTI: 'com.adobe.pdf',
-    });
+  if (!available) {
+    return { method: 'saved', uri };
   }
 
-  return uri;
+  await Sharing.shareAsync(uri, {
+    mimeType: 'application/pdf',
+    dialogTitle: 'Rapport teilen',
+    UTI: 'com.adobe.pdf',
+  });
+  return { method: 'shared', uri };
 }

@@ -9,9 +9,30 @@
   "viewMode": "verbose",
   "permissions": {
     "allow": [
-      "Read(./**)",
-      "Edit(./**)",
-      "Write(./**)",
+      "Read(./*)",
+      "Read(./src/**)",
+      "Read(./app/**)",
+      "Read(./desktop-converter/**)",
+      "Read(./assets/**)",
+      "Read(./sample/**)",
+      "Read(./.claude/**)",
+      "Read(./.github/**)",
+      "Edit(./*)",
+      "Edit(./src/**)",
+      "Edit(./app/**)",
+      "Edit(./desktop-converter/**)",
+      "Edit(./assets/**)",
+      "Edit(./sample/**)",
+      "Edit(./.claude/**)",
+      "Edit(./.github/**)",
+      "Write(./*)",
+      "Write(./src/**)",
+      "Write(./app/**)",
+      "Write(./desktop-converter/**)",
+      "Write(./assets/**)",
+      "Write(./sample/**)",
+      "Write(./.claude/**)",
+      "Write(./.github/**)",
       "Glob",
       "Grep",
       "Bash(pwd)",
@@ -151,7 +172,11 @@
       "Bash(chmod -R 777 *)",
       "Bash(chown -R *)",
       "Bash(npm publish*)",
-      "Bash(eas submit*)"
+      "Bash(eas submit*)",
+      "Bash(eas build*)",
+      "Bash(expo publish*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)"
     ]
   },
   "hooks": {
@@ -167,7 +192,7 @@
         ]
       },
       {
-        "matcher": "Read|Edit|Write|Glob|Grep|LS",
+        "matcher": "Read|Edit|MultiEdit|Write|Glob|Grep|LS",
         "hooks": [
           {
             "type": "command",
@@ -179,7 +204,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Edit|Write",
+        "matcher": "Bash|Edit|MultiEdit|Write",
         "hooks": [
           {
             "type": "command",

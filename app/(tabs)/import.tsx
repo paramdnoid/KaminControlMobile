@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Alert, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
@@ -193,13 +193,13 @@ export default function ImportScreen() {
   );
 }
 
-function MetricGrid({ children }: { children: React.ReactNode }) {
+function MetricGrid({ children }: { children: ReactNode }) {
   return <View className="flex-row flex-wrap gap-2">{children}</View>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <View className="bg-surface-muted rounded-md flex-grow min-w-[110px] p-3 gap-0.5">
+    <View className="bg-surface-muted rounded-md flex-grow min-w-[110px] max-w-[180px] p-3 gap-0.5">
       <Text className="text-h3 font-bold text-ink leading-[22px]" numberOfLines={2}>{value}</Text>
       <Text className="text-small text-muted leading-[18px]">{label}</Text>
     </View>

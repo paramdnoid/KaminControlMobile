@@ -18,6 +18,7 @@ export function Screen({ title, subtitle, eyebrow, headerRight, children, footer
     <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-background">
       <View className="flex-1 self-center max-w-shell w-full">
         <ScrollView
+          className="flex-1"
           contentContainerClassName="gap-4 p-4 pb-8"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}

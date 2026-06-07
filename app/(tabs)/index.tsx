@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Text, TextInput, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Text, TextInput, View } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import {
   CheckCircle2,
@@ -24,22 +24,36 @@ export default function HomeScreen() {
   const [properties, setProperties] = useState<CustomerProperty[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [creatingFor, setCreatingFor] = useState<string | null>(null);
 
   const load = useCallback(async (search = query) => {
     setLoading(true);
-    const [nextStats, nextProperties] = await Promise.all([
-      getDashboardStats(),
-      listProperties(search, 40),
-    ]);
-    setStats(nextStats);
-    setProperties(nextProperties);
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const [nextStats, nextProperties] = await Promise.all([
+        getDashboardStats(),
+        listProperties(search, 40),
+      ]);
+      setStats(nextStats);
+      setProperties(nextProperties);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Laden fehlgeschlagen.');
+    } finally {
+      setLoading(false);
+    }
   }, [query]);
 
   useFocusEffect(
     useCallback(() => { load(); }, [load]),
   );
+
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onSearchChange = useCallback((value: string) => {
+    setQuery(value);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => load(value), 300);
+  }, [load]);
 
   const subtitle = useMemo(() => {
     if (!stats?.properties) {
@@ -53,6 +67,8 @@ export default function HomeScreen() {
     try {
       const report = await createReport(propertyId);
       router.push({ pathname: '/report/[id]', params: { id: report.id } });
+    } catch (e) {
+      Alert.alert('Rapport fehlgeschlagen', e instanceof Error ? e.message : 'Rapport konnte nicht angelegt werden.');
     } finally {
       setCreatingFor(null);
     }
@@ -86,7 +102,7 @@ export default function HomeScreen() {
         <Search color={colors.mutedLight} size={18} strokeWidth={2.5} />
         <TextInput
           accessibilityLabel="Liegenschaften suchen"
-          onChangeText={(value) => { setQuery(value); load(value); }}
+          onChangeText={onSearchChange}
           placeholder="Kundennummer, Ort, Strasse, Name"
           placeholderTextColor={colors.mutedLight}
           className="flex-1 text-base text-ink min-h-[52px]"
@@ -95,7 +111,13 @@ export default function HomeScreen() {
       </View>
 
       {/* Property list */}
-      {loading ? (
+      {loadError ? (
+        <Card>
+          <Text className="text-h3 font-bold text-ink">Fehler beim Laden</Text>
+          <Text className="text-base text-muted leading-6">{loadError}</Text>
+          <Button label="Erneut versuchen" onPress={() => load()} variant="secondary" />
+        </Card>
+      ) : loading ? (
         <View className="items-center py-6">
           <ActivityIndicator color={colors.primary} />
         </View>

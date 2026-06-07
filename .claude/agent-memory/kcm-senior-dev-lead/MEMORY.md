@@ -4,3 +4,4 @@
 - [N+1 Query Fix Pattern](project_n_plus_one_fix.md) — TASK-01/02: batched 3-query approach for listReports; IN-clause spread pattern
 - [Autosave isDirty Pattern](project_autosave_isdirty.md) — TASK-10: replaced useRef hydrated guard with isDirty useState in ReportScreen
 - [Base64 Chunked Pattern](project_base64_chunked.md) — TASK-03: 64 KiB chunk fromCharCode for large ZIP base64 conversion
+- [Skill bgIsolation Feedback](feedback_skill_session_isolation.md) — Multi-skill invocations in one turn trip bgIsolation guard; next user turn clears it
