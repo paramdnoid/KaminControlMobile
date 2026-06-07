@@ -12,6 +12,7 @@
 
 - Install: `npm install`
 - Mobile dev: `npm start`, `npm run android`, `npm run ios`, `npm run web`
+- Web bundle smoke: `npm run smoke:web`
 - Typecheck: `npm run typecheck`
 - Converter typecheck: `npm run converter:typecheck`
 - Converter test: `npm run converter:test`
@@ -49,13 +50,13 @@ Use the main thread as orchestrator. Specialists do not call other agents. When 
 
 ## Validation
 
-- Config-only changes: run `npm run claude:validate-settings` and `git diff --check -- CLAUDE.md .claude .gitignore`.
+- Config/docs/script changes: run `npm run claude:validate-settings` and `git diff --check -- CLAUDE.md README.md package.json .claude .gitignore`.
 - Bash-based file changes must still be validated: `mark_validation_needed.py` classifies Git changes after mutating Bash commands, and `quality_gate_stop.py` falls back to Git status when no marker exists.
 - Run `/ship-check` before commit, push, PR, or handoff.
 - App or shared TypeScript changes: `npm run typecheck` and `npm run lint`.
 - Converter changes: `npm run typecheck`, `npm run converter:test`, and `npm run converter:build`.
 - PDF/report flow changes: include `npm run typecheck` + `npm run lint` and manually inspect generated HTML/JSON logic.
-- UI changes: run `npm run typecheck` + `npm run lint` and manually smoke the relevant Expo screen; no mobile E2E suite exists yet.
+- UI changes: run `npm run typecheck` + `npm run lint`; use `npm run smoke:web` for a dependency-free Expo web bundle smoke and manually smoke the relevant Expo screen. No mobile E2E suite exists yet.
 
 ## Context And Effort
 

@@ -52,6 +52,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "smoke:web": "expo export --platform web --output-dir .claude/tmp/expo-web-smoke --clear",
     "typecheck": "tsc --noEmit && npm run converter:typecheck",
     "converter:typecheck": "tsc -p desktop-converter/tsconfig.json --noEmit",
     "converter:build": "vite build --config desktop-converter/vite.config.ts",

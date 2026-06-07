@@ -32,6 +32,9 @@ BLOCKED_REGEXES = [
 
 MUTATING_SEGMENT_RE = re.compile(r"(^|[;&|]{1,2}\s*)(cp|mv|rm|mkdir|touch|tee)\b", re.IGNORECASE)
 WRITE_REDIRECT_RE = re.compile(r"(^|[^<])(?P<operator>>>?|[12]>)\s*(?P<target>(?!&)[^\s]+)")
+URL_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+GIT_PATHSPEC_COMMANDS = {"cat-file", "diff", "grep", "show"}
+GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree"}
 TEMP_WRITE_PREFIXES = (".claude/tmp/",)
 SCREENSHOT_DIR = ".claude/tmp/screenshots/"
 
@@ -134,8 +137,52 @@ def command_writes_outside_temp(command: str) -> str | None:
     return None
 
 
+def sensitive_path_from_git_pathspec(candidate: str) -> str | None:
+    cleaned = candidate.strip("'\"").rstrip(";,")
+    if ":" not in cleaned or URL_SCHEME_RE.match(cleaned):
+        return None
+
+    _, path = cleaned.split(":", 1)
+    normalized = strip_current_dir_prefix(path.lstrip(":"))
+    if normalized and is_sensitive(normalized) and not is_allowed_sensitive_exception(normalized):
+        return candidate
+    return None
+
+
+def command_mentions_sensitive_git_pathspec(parts: list[str]) -> str | None:
+    index = 0
+    while index < len(parts):
+        if parts[index] != "git":
+            index += 1
+            continue
+
+        subcommand_index = index + 1
+        while subcommand_index < len(parts) and parts[subcommand_index].startswith("-"):
+            option = parts[subcommand_index]
+            subcommand_index += 2 if option in GIT_OPTIONS_WITH_VALUE else 1
+
+        if subcommand_index >= len(parts):
+            return None
+
+        if parts[subcommand_index] not in GIT_PATHSPEC_COMMANDS:
+            index = subcommand_index + 1
+            continue
+
+        for candidate in parts[subcommand_index + 1 :]:
+            if candidate in {"|", "||", "&&", ";"}:
+                break
+            sensitive = sensitive_path_from_git_pathspec(candidate)
+            if sensitive:
+                return sensitive
+        index = subcommand_index + 1
+    return None
+
+
 def command_mentions_sensitive_path(command: str) -> str | None:
     parts = shell_parts(command)
+    git_pathspec = command_mentions_sensitive_git_pathspec(parts)
+    if git_pathspec:
+        return git_pathspec
 
     candidates = []
     for part in parts:

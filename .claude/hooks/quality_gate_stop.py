@@ -174,7 +174,7 @@ def config_gate() -> tuple[bool, str]:
         messages.append(message)
         if not ok:
             return False, "\n".join(messages)
-    ok, output = run(["git", "diff", "--check", "--", "CLAUDE.md", ".claude", ".gitignore"], timeout=30)
+    ok, output = run(["git", "diff", "--check", "--", "CLAUDE.md", "README.md", "package.json", ".claude", ".gitignore"], timeout=30)
     messages.append(output or "git diff --check ok")
     return ok, "\n".join(messages)
 

@@ -8,6 +8,7 @@
 - `npm run converter:build`: Vite build for the converter renderer.
 - `npm run lint`: ESLint for `app/**/*.ts(x)` and `src/**/*.ts(x)`.
 - `npm run lint:fix`: ESLint autofix for app and shared source files.
+- `npm run smoke:web`: dependency-free Expo web bundle smoke; output stays in `.claude/tmp/expo-web-smoke`.
 - `npm run claude:validate-settings`: full JSON Schema validation for `.claude/settings.json` and `.claude/settings.local.json` when present, plus guard-hook simulations, Python hook compile, agent skill links, skill frontmatter policy, and validation-marker/Stop-gate simulation.
 - `npm run claude:test-hooks`: guard-hook simulations only.
 - `/ship-check`: manual final gate before commit, push, PR, or handoff.
@@ -16,10 +17,10 @@
 
 ## By Change Surface
 
-- `CLAUDE.md`, `.claude/**`, `.gitignore`: run `npm run claude:validate-settings`, then `git diff --check -- CLAUDE.md .claude .gitignore`.
+- `CLAUDE.md`, `README.md`, `package.json`, `.claude/**`, `.gitignore`: run `npm run claude:validate-settings`, then `git diff --check -- CLAUDE.md README.md package.json .claude .gitignore`.
 - Bash-based file mutations: rely on `mark_validation_needed.py` to classify Git changes after mutating commands; `quality_gate_stop.py` also falls back to Git status if the marker is missing.
 - App config files (`app.json`, `metro.config.js`, `babel.config.js`, `eslint.config.mjs`, `tailwind.config.js`, `nativewind-env.d.ts`, `tsconfig*.json`, `package*.json`): treat as app validation surfaces.
-- `app/**`, `src/components/**`, `src/theme/**`: `npm run typecheck`, then manual route smoke check.
+- `app/**`, `src/components/**`, `src/theme/**`: `npm run typecheck`, `npm run lint`, `npm run smoke:web`, then manual route smoke check.
 - `src/data/**`, `src/import/**`, `src/types.ts`: `npm run typecheck`; add converter checks if Genesis bundle fields changed.
 - `desktop-converter/**`: `npm run typecheck`, `npm run converter:test`, `npm run converter:build`.
 - `src/pdf/**`, `app/report/**`: `npm run typecheck`, manual PDF/JSON output review.
@@ -27,6 +28,6 @@
 
 ## Known Gaps
 
-- No automated mobile E2E suite exists.
+- No automated mobile E2E suite exists; `npm run smoke:web` is a web bundle smoke, not an interaction test.
 - No rendered PDF visual snapshot suite exists; `converter:test` includes PDF HTML pure-function regression assertions.
 - Converter tests are assertion-based TypeScript scripts, not a full test runner.

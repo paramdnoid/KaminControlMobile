@@ -34,6 +34,22 @@ Typpruefung:
 npm run typecheck
 ```
 
+## Claude / Quality Gates
+
+Claude-Konfiguration und Hooks pruefen:
+
+```bash
+npm run claude:validate-settings
+```
+
+Dependency-freier Expo-Web-Smoke:
+
+```bash
+npm run smoke:web
+```
+
+Der Web-Smoke exportiert nur nach `.claude/tmp/expo-web-smoke` und erzeugt keine zu commitenden Artefakte.
+
 ## Genesis-Converter
 
 Der Genesis-Export besteht aus Access/MDB-Dateien und wird bewusst nicht direkt auf iOS/Android gelesen. Stattdessen erzeugt die Desktop-App ein mobiles JSON-Bundle.
