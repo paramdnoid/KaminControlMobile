@@ -16,7 +16,7 @@ allowed-tools: Read Grep Glob LS Bash
 
 ## Required honesty
 
-- Do not claim lint, mobile E2E, or PDF regression coverage exists unless scripts have been added.
+- Do not claim mobile E2E or rendered PDF visual regression coverage exists unless scripts have been added.
 - If a check cannot run, state the reason and residual risk.
 
 ## Additional resources

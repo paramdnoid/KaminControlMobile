@@ -11,13 +11,14 @@ import sys
 from pathlib import Path
 
 
-STATE_PATH = Path(".claude/tmp/validation-needed.json")
+PROJECT_DIR = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd())).resolve()
+STATE_PATH = PROJECT_DIR / ".claude/tmp/validation-needed.json"
 
 
 def run(command: list[str], timeout: int = 120) -> tuple[bool, str]:
     result = subprocess.run(
         command,
-        cwd=Path.cwd(),
+        cwd=PROJECT_DIR,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -29,10 +30,15 @@ def run(command: list[str], timeout: int = 120) -> tuple[bool, str]:
 
 
 def validate_json() -> tuple[bool, str]:
-    try:
-        json.loads(Path(".claude/settings.json").read_text(encoding="utf-8"))
-    except Exception as error:
-        return False, f".claude/settings.json is invalid JSON: {error}"
+    settings_paths = [PROJECT_DIR / ".claude/settings.json", PROJECT_DIR / ".claude/settings.local.json"]
+    for settings_path in settings_paths:
+        if not settings_path.exists():
+            continue
+        try:
+            json.loads(settings_path.read_text(encoding="utf-8"))
+        except Exception as error:
+            relative = settings_path.relative_to(PROJECT_DIR)
+            return False, f"{relative} is invalid JSON: {error}"
     return True, "settings JSON ok"
 
 
@@ -43,11 +49,11 @@ def validate_settings_schema() -> tuple[bool, str]:
 
 def validate_hooks_compile() -> tuple[bool, str]:
     failures = []
-    for script in sorted(Path(".claude/hooks").glob("*.py")):
+    for script in sorted((PROJECT_DIR / ".claude/hooks").glob("*.py")):
         try:
             py_compile.compile(str(script), doraise=True)
         except py_compile.PyCompileError as error:
-            failures.append(f"{script}: {error.msg}")
+            failures.append(f"{script.relative_to(PROJECT_DIR)}: {error.msg}")
     if failures:
         return False, "\n".join(failures)
     return True, "hook Python compile ok"
@@ -55,14 +61,15 @@ def validate_hooks_compile() -> tuple[bool, str]:
 
 def validate_agent_skill_links() -> tuple[bool, str]:
     failures = []
-    for agent in sorted(Path(".claude/agents").glob("*.md")):
+    for agent in sorted((PROJECT_DIR / ".claude/agents").glob("*.md")):
         text = agent.read_text(encoding="utf-8")
+        relative_agent = agent.relative_to(PROJECT_DIR)
         if not text.startswith("---"):
-            failures.append(f"{agent}: missing frontmatter")
+            failures.append(f"{relative_agent}: missing frontmatter")
             continue
         parts = text.split("---", 2)
         if len(parts) < 3:
-            failures.append(f"{agent}: incomplete frontmatter")
+            failures.append(f"{relative_agent}: incomplete frontmatter")
             continue
         lines = parts[1].splitlines()
         in_skills = False
@@ -73,8 +80,8 @@ def validate_agent_skill_links() -> tuple[bool, str]:
                 continue
             if in_skills and stripped.startswith("- "):
                 skill = stripped[2:].strip()
-                if not Path(".claude/skills", skill, "SKILL.md").exists():
-                    failures.append(f"{agent}: missing skill {skill}")
+                if not (PROJECT_DIR / ".claude/skills" / skill / "SKILL.md").exists():
+                    failures.append(f"{relative_agent}: missing skill {skill}")
                 continue
             if in_skills and stripped and not line.startswith((" ", "\t")):
                 in_skills = False
@@ -123,6 +130,8 @@ def main() -> int:
 
     if surfaces.get("app") or surfaces.get("report") or surfaces.get("converter"):
         commands.append(["npm", "run", "typecheck"])
+    if surfaces.get("app") or surfaces.get("report"):
+        commands.append(["npm", "run", "lint"])
     if surfaces.get("converter"):
         commands.extend([["npm", "run", "converter:test"], ["npm", "run", "converter:build"]])
 

@@ -71,7 +71,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/guard_dangerous_commands.py"
+            "command": "python3",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_dangerous_commands.py"]
           }
         ]
       },
@@ -80,7 +81,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/guard_sensitive_paths.py"
+            "command": "python3",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_sensitive_paths.py"]
           }
         ]
       }
@@ -91,7 +93,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/mark_validation_needed.py"
+            "command": "python3",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/mark_validation_needed.py"]
           }
         ]
       }
@@ -101,7 +104,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/quality_gate_stop.py"
+            "command": "python3",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/quality_gate_stop.py"]
           }
         ]
       }

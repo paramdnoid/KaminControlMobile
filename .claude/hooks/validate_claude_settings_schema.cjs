@@ -7,7 +7,13 @@ const Ajv = require('ajv');
 const addFormats = require('ajv-formats');
 
 const DEFAULT_SCHEMA_URL = 'https://json.schemastore.org/claude-code-settings.json';
-const settingsPath = process.argv[2] || '.claude/settings.json';
+const DEFAULT_SETTINGS_PATHS = ['.claude/settings.json'];
+if (fs.existsSync('.claude/settings.local.json')) {
+  DEFAULT_SETTINGS_PATHS.push('.claude/settings.local.json');
+}
+const settingsPaths = process.argv.slice(2);
+const targets = settingsPaths.length > 0 ? settingsPaths : DEFAULT_SETTINGS_PATHS;
+const schemaCache = new Map();
 
 function readJson(filePath) {
   const resolved = path.resolve(filePath);
@@ -73,12 +79,22 @@ function formatAjvError(error) {
   return `${location} ${error.message || 'is invalid'}${detail}`;
 }
 
-async function main() {
+async function loadSchema(schemaUrl) {
+  if (!schemaCache.has(schemaUrl)) {
+    schemaCache.set(
+      schemaUrl,
+      schemaUrl.startsWith('http://') || schemaUrl.startsWith('https://')
+        ? requestJson(schemaUrl)
+        : Promise.resolve(readJson(schemaUrl)),
+    );
+  }
+  return schemaCache.get(schemaUrl);
+}
+
+async function validateSettingsFile(settingsPath) {
   const settings = readJson(settingsPath);
   const schemaUrl = process.env.CLAUDE_SETTINGS_SCHEMA_URL || settings.$schema || DEFAULT_SCHEMA_URL;
-  const schema = schemaUrl.startsWith('http://') || schemaUrl.startsWith('https://')
-    ? await requestJson(schemaUrl)
-    : readJson(schemaUrl);
+  const schema = await loadSchema(schemaUrl);
 
   const ajv = new Ajv({
     allErrors: true,
@@ -94,10 +110,21 @@ async function main() {
     for (const error of validate.errors || []) {
       console.error(`- ${formatAjvError(error)}`);
     }
-    process.exit(1);
+    return false;
   }
 
   console.log(`Claude settings schema validation ok (${schema.title || schemaUrl})`);
+  return true;
+}
+
+async function main() {
+  let valid = true;
+  for (const target of targets) {
+    valid = (await validateSettingsFile(target)) && valid;
+  }
+  if (!valid) {
+    process.exit(1);
+  }
 }
 
 main().catch((error) => {

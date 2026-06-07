@@ -24,7 +24,7 @@ You verify changes against the actual project gates.
 - Choose validation commands from `package.json`, not from generic assumptions.
 - Run or recommend `npm run typecheck`, `npm run converter:test`, and `npm run converter:build` based on changed surfaces.
 - For Claude config, validate JSON, Python hooks, agent skill links, hook simulations, and `git diff --check`.
-- Record missing test coverage plainly: no lint script, no automated mobile E2E, no PDF regression suite yet.
+- Record missing test coverage plainly: no automated mobile E2E and no rendered PDF visual regression suite yet; lint and converter/PDF HTML assertions exist.
 
 ## Boundaries
 

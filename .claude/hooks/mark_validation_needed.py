@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Iterable
 
 
-STATE_PATH = Path(".claude/tmp/validation-needed.json")
+PROJECT_DIR = Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")).resolve()
+STATE_PATH = PROJECT_DIR / ".claude/tmp/validation-needed.json"
 
 
 def read_payload() -> dict:

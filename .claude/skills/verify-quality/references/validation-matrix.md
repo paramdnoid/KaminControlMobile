@@ -6,7 +6,9 @@
 - `npm run converter:typecheck`: converter TypeScript only.
 - `npm run converter:test`: Genesis converter mapping assertions.
 - `npm run converter:build`: Vite build for the converter renderer.
-- `npm run claude:validate-settings`: full JSON Schema validation for `.claude/settings.json`.
+- `npm run lint`: ESLint for `app/**/*.ts(x)` and `src/**/*.ts(x)`.
+- `npm run lint:fix`: ESLint autofix for app and shared source files.
+- `npm run claude:validate-settings`: full JSON Schema validation for `.claude/settings.json` and `.claude/settings.local.json` when present.
 - `npm start`, `npm run android`, `npm run ios`, `npm run web`: development launch commands.
 
 ## By Change Surface
@@ -20,7 +22,6 @@
 
 ## Known Gaps
 
-- No lint script exists.
 - No automated mobile E2E suite exists.
-- No PDF snapshot/regression suite exists.
+- No rendered PDF visual snapshot suite exists; `converter:test` includes PDF HTML pure-function regression assertions.
 - Converter tests are assertion-based TypeScript scripts, not a full test runner.
