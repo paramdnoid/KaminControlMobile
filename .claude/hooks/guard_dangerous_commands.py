@@ -25,8 +25,10 @@ BLOCKED_REGEXES = [
     (r"\bdd\s+.*\bof=", "dd raw write"),
     (r"\bdiskutil\s+(erase|partition|apfs\s+delete)", "disk erase/partition"),
     (r"\bmkfs(\.|\s)", "mkfs"),
+    (r"\bgit\s+push\b.*(--force(-with-lease)?\b|(^|\s)-f\b)", "git push --force"),
     (r"\bnpm\s+publish\b", "npm publish"),
-    (r"\beas\s+submit\b", "EAS submit"),
+    (r"\beas\s+(submit|build)\b", "EAS submit/build"),
+    (r"\bexpo\s+publish\b", "expo publish"),
     (r"\b(curl|wget)\b.*\|\s*(sh|bash|zsh)\b", "remote shell pipe"),
 ]
 
