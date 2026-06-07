@@ -3,45 +3,12 @@
 
 from __future__ import annotations
 
-import fnmatch
 import json
 import re
 import shlex
 import sys
-from pathlib import Path
 
-
-SENSITIVE_GLOBS = [
-    ".env",
-    ".env.*",
-    "**/.env",
-    "**/.env.*",
-    "*.pem",
-    "*.key",
-    "*.p8",
-    "*.p12",
-    "*.jks",
-    "artifacts/**",
-    "pdfs/**",
-    "dist/**",
-    ".desktop-build/**",
-    "genesis-export-v*.json",
-    "genesis-mobile-export/**",
-    "genesis-mobile-export.zip",
-    "Daten.zip",
-    "*.MDB",
-    "*.mdb",
-    "2026-06-01 - Sicherung Genesis - KOMPLETT - 001.zip",
-]
-
-# Paths that match a sensitive glob above but are explicitly permitted.
-# Screenshots are UI captures, not customer data, so PNGs under artifacts/
-# are exempted (compared case-insensitively). Checked per path, so a command
-# that also touches a genuinely sensitive file is still blocked.
-ALLOWED_GLOBS = [
-    "artifacts/*.png",
-    "artifacts/**/*.png",
-]
+from sensitive_paths import is_allowed_sensitive_exception, is_sensitive, strip_current_dir_prefix
 
 BLOCKED_REGEXES = [
     (r"(^|[;&|]\s*)rm\s+(-[^\s]*r[^\s]*\s+|--recursive\b)", "recursive remove"),
@@ -90,19 +57,19 @@ def command_mentions_sensitive_path(command: str) -> str | None:
 
     candidates = []
     for part in parts:
-        if part.startswith("-"):
+        if part in {"|", "||", "&&", ";", ">", ">>", "<", "2>", "2>>"} or part.startswith("-"):
             continue
         cleaned = part.strip("'\"")
-        if "/" in cleaned or "." in cleaned or cleaned.lower().endswith((".zip", ".mdb", ".json")):
+        cleaned = cleaned.lstrip("<>")
+        if cleaned and not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", cleaned):
             candidates.append(cleaned)
 
     for candidate in candidates:
-        normalized = candidate.replace("\\", "/").lstrip("./")
-        if any(fnmatch.fnmatch(normalized.lower(), allowed) for allowed in ALLOWED_GLOBS):
+        normalized = strip_current_dir_prefix(candidate)
+        if is_allowed_sensitive_exception(normalized):
             continue
-        for pattern in SENSITIVE_GLOBS:
-            if fnmatch.fnmatch(normalized, pattern) or fnmatch.fnmatch(Path(normalized).name, pattern):
-                return candidate
+        if is_sensitive(normalized):
+            return candidate
     return None
 
 

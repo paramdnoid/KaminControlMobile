@@ -15,7 +15,7 @@ async function main() {
   await mkdir(path.dirname(outputPath), { recursive: true });
   await writeFile(outputPath, stringifyMobileGenesisBundle(result.bundle), 'utf8');
 
-  const objectTariffSuggestions = result.bundle.plannedWork.filter((item) => item.source === 'objectTariff' || item.source === 'tariff').length;
+  const objectTariffSuggestions = result.bundle.plannedWork.filter((item) => item.source === 'objectTariff').length;
   const invoiceLineSuggestions = result.bundle.plannedWork.filter((item) => item.source === 'invoiceLine').length;
   const arbvolSummary = result.bundle.plannedWork.filter((item) => item.source === 'arbvol').length;
   const documentCounts = result.bundle.metadata.documentCounts ?? {};

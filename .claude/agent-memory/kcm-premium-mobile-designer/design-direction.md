@@ -7,7 +7,7 @@ metadata:
 
 KaminControlMobile is a calm, professional field-work tool for Kaminfeger (chimney sweep) professionals. Premium means confident clarity, not decoration.
 
-**Identity**: Warm forest-green primary (`#1E4E46`) on warm cream background (`#F5F2EC`). Cards lift off the background via subtle shadow. Pure white cards against the cream creates perceived quality.
+**Identity**: Warm forest-green primary (`#16453D`) on warm cream background (`#F2EFE8`). Cards lift off the background via the shared shadow tokens. Pure white cards against the cream create perceived quality.
 
 **Tone**: Calm, trustworthy, efficient. Every element serves a workflow step. No decorative chrome.
 

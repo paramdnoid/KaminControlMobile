@@ -58,7 +58,8 @@
     "converter:start": "npm run converter:build && NODE_OPTIONS=\"--require tsx/cjs\" electron desktop-converter/electron/main.ts",
     "converter:convert": "tsx desktop-converter/scripts/convert.ts",
     "converter:test": "tsx desktop-converter/tests/genesisConverter.test.ts",
-    "claude:validate-settings": "node .claude/hooks/validate_claude_settings_schema.cjs",
+    "claude:test-hooks": "python3 .claude/hooks/test_guards.py",
+    "claude:validate-settings": "node .claude/hooks/validate_claude_settings_schema.cjs && npm run claude:test-hooks",
     "lint": "eslint 'app/**/*.{ts,tsx}' 'src/**/*.{ts,tsx}'",
     "lint:fix": "eslint 'app/**/*.{ts,tsx}' 'src/**/*.{ts,tsx}' --fix"
   },
