@@ -24,6 +24,7 @@ import type {
 } from '../types';
 import { nowIso, todayIsoDate } from '../utils/date';
 import { createId } from '../utils/id';
+import { searchProperties } from '../utils/search';
 import { compact, compactMultiline } from '../utils/text';
 import {
   normalizeGenesisProperty,
@@ -250,31 +251,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 }
 
 export async function listProperties(query = '', limit = 30): Promise<CustomerProperty[]> {
-  const lookup = compact(query).toLowerCase();
   const store = await readWebStore();
-  return store.properties
-    .filter((property) => {
-      if (!lookup) {
-        return true;
-      }
-
-      return [
-        property.customerNumber,
-        property.propertyLabel,
-        property.street,
-        property.postalCode,
-        property.city,
-        property.owner,
-        property.tenant,
-        property.sourceKey ?? '',
-      ].some((value) => value.toLowerCase().includes(lookup));
-    })
-    .sort((a, b) =>
-      `${a.isActive === false ? 1 : 0}${a.city}${a.street}${a.customerNumber}`.localeCompare(
-        `${b.isActive === false ? 1 : 0}${b.city}${b.street}${b.customerNumber}`,
-      ),
-    )
-    .slice(0, limit);
+  return searchProperties(store.properties, query, limit);
 }
 
 export async function getProperty(id: string): Promise<CustomerProperty | null> {

@@ -59,6 +59,7 @@
     "converter:start": "npm run converter:build && NODE_OPTIONS=\"--require tsx/cjs\" electron desktop-converter/electron/main.ts",
     "converter:convert": "tsx desktop-converter/scripts/convert.ts",
     "converter:test": "tsx desktop-converter/tests/genesisConverter.test.ts",
+    "test:search": "tsx src/utils/search.test.ts",
     "claude:validate-schema": "node .claude/hooks/validate_claude_settings_schema.cjs",
     "claude:test-hooks": "python3 .claude/hooks/test_guards.py",
     "claude:validate-config": "python3 .claude/hooks/validate_claude_config.py",

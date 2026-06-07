@@ -24,6 +24,7 @@ import type {
 } from '../types';
 import { nowIso, todayIsoDate } from '../utils/date';
 import { createId } from '../utils/id';
+import { searchProperties } from '../utils/search';
 import { compact, compactMultiline } from '../utils/text';
 import {
   defaultLineTypeForSource,
@@ -915,43 +916,25 @@ export async function listProperties(query = '', limit = 30): Promise<CustomerPr
   if (!db) {
     throw new Error('Datenbank nicht verfuegbar.');
   }
-  const search = `%${compact(query)}%`;
 
-  const rows = query
-    ? await db.getAllAsync<PropertyRow>(
-        `
-          SELECT * FROM customer_properties
-          WHERE customer_number LIKE ?
-            OR property_label LIKE ?
-            OR street LIKE ?
-            OR postal_code LIKE ?
-            OR city LIKE ?
-            OR owner LIKE ?
-            OR tenant LIKE ?
-            OR source_key LIKE ?
-          ORDER BY is_active DESC, city, street, customer_number
-          LIMIT ?
-        `,
-        search,
-        search,
-        search,
-        search,
-        search,
-        search,
-        search,
-        search,
-        limit,
-      )
-    : await db.getAllAsync<PropertyRow>(
-        `
-          SELECT * FROM customer_properties
-          ORDER BY is_active DESC, city, street, customer_number
-          LIMIT ?
-        `,
-        limit,
-      );
+  // No query: let SQLite do the ordering and limiting cheaply.
+  if (!compact(query)) {
+    const rows = await db.getAllAsync<PropertyRow>(
+      `
+        SELECT * FROM customer_properties
+        ORDER BY is_active DESC, city, street, customer_number
+        LIMIT ?
+      `,
+      limit,
+    );
+    return rows.map(mapProperty);
+  }
 
-  return rows.map(mapProperty);
+  // Query present: rank in JS so matching is diacritic-insensitive, multi-word,
+  // relevance-ordered, and typo-tolerant. The local property set is small enough
+  // (a single Kaminfeger's customer base) that scanning all rows per search is fine.
+  const rows = await db.getAllAsync<PropertyRow>('SELECT * FROM customer_properties');
+  return searchProperties(rows.map(mapProperty), query, limit);
 }
 
 export async function getProperty(id: string): Promise<CustomerProperty | null> {
