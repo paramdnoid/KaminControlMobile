@@ -8,6 +8,7 @@ const addFormats = require('ajv-formats');
 
 const DEFAULT_SCHEMA_URL = 'https://json.schemastore.org/claude-code-settings.json';
 const DEFAULT_SETTINGS_PATHS = ['.claude/settings.json'];
+const SCHEMA_CACHE_DIR = path.resolve('.claude/tmp/schema-cache');
 if (fs.existsSync('.claude/settings.local.json')) {
   DEFAULT_SETTINGS_PATHS.push('.claude/settings.local.json');
 }
@@ -18,6 +19,25 @@ const schemaCache = new Map();
 function readJson(filePath) {
   const resolved = path.resolve(filePath);
   return JSON.parse(fs.readFileSync(resolved, 'utf8'));
+}
+
+function cachePathFor(schemaUrl) {
+  const encoded = Buffer.from(schemaUrl).toString('base64url');
+  return path.join(SCHEMA_CACHE_DIR, `${encoded}.json`);
+}
+
+function readCachedSchema(schemaUrl, error) {
+  const cachePath = cachePathFor(schemaUrl);
+  if (!fs.existsSync(cachePath)) {
+    throw error;
+  }
+  console.error(`Claude settings schema fetch failed, using cached schema: ${error.message}`);
+  return readJson(cachePath);
+}
+
+function writeCachedSchema(schemaUrl, schema) {
+  fs.mkdirSync(SCHEMA_CACHE_DIR, { recursive: true });
+  fs.writeFileSync(cachePathFor(schemaUrl), `${JSON.stringify(schema, null, 2)}\n`, 'utf8');
 }
 
 function requestJson(url, redirects = 0) {
@@ -85,6 +105,11 @@ async function loadSchema(schemaUrl) {
       schemaUrl,
       schemaUrl.startsWith('http://') || schemaUrl.startsWith('https://')
         ? requestJson(schemaUrl)
+            .then((schema) => {
+              writeCachedSchema(schemaUrl, schema);
+              return schema;
+            })
+            .catch((error) => readCachedSchema(schemaUrl, error))
         : Promise.resolve(readJson(schemaUrl)),
     );
   }

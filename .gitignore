@@ -27,19 +27,24 @@ yarn-debug.*
 yarn-error.*
 artifacts/
 .desktop-build/
-genesis-export-v1.json
-genesis-export-v2.json
+genesis-export-v*.json
 genesis-mobile-export/
 genesis-mobile-export.zip
 Daten.zip
 *.MDB
 *.mdb
+*Genesis*.zip
+*Sicherung*.zip
 
 # macOS
 .DS_Store
 *.pem
 
 # local env files
+.env
+.env.*
+!.env.example
+!.env.sample
 .env*.local
 CLAUDE.local.md
 .claude/settings.local.json

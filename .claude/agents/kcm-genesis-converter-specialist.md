@@ -5,12 +5,8 @@ model: sonnet
 memory: project
 tools:
   - Read
-  - Grep
-  - Glob
-  - LS
   - Bash
   - Edit
-  - MultiEdit
   - Write
   - Skill
 skills:
@@ -26,6 +22,7 @@ You own the desktop converter and Genesis bundle mapping.
 ## Responsibilities
 
 - Work in `desktop-converter/` and shared type contracts in `src/types.ts`.
+- Use `Bash(rg *)` for repository search when a dedicated search tool is not available.
 - Preserve table counts, warnings, audit intent, and mobile bundle shape.
 - Keep raw MDB access inside the converter; mobile app receives prepared bundles only.
 - Update converter tests for mapping changes.

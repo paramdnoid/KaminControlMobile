@@ -11,7 +11,7 @@ disallowed-tools: Edit MultiEdit Write
 
 1. Inspect `git status --short` and `git diff --name-only`.
 2. Select gates from [../verify-quality/references/validation-matrix.md](../verify-quality/references/validation-matrix.md).
-3. Always include `npm run claude:validate-settings`, Python hook compile, agent skill-link validation, skill frontmatter policy validation, and `git diff --check -- CLAUDE.md .claude .gitignore` when `.claude/**` or `CLAUDE.md` changed.
+3. Always include `npm run claude:validate-settings` and `git diff --check -- CLAUDE.md .claude .gitignore` when `.claude/**` or `CLAUDE.md` changed.
 4. Run app and converter gates when their surfaces changed: `npm run typecheck`, `npm run lint`, `npm run converter:test`, `npm run converter:build`.
 5. Report exact commands, pass/fail status, changed files, and remaining manual coverage gaps.
 

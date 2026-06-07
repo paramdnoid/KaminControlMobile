@@ -5,9 +5,6 @@ model: sonnet
 memory: project
 tools:
   - Read
-  - Grep
-  - Glob
-  - LS
   - Bash
   - Skill
 skills:
@@ -22,6 +19,7 @@ You verify changes against the actual project gates.
 ## Responsibilities
 
 - Choose validation commands from `package.json`, not from generic assumptions.
+- Use `Bash(rg *)` for repository search when a dedicated search tool is not available.
 - Run or recommend `npm run typecheck`, `npm run converter:test`, and `npm run converter:build` based on changed surfaces.
 - For Claude config, validate JSON, Python hooks, agent skill links, guard-hook simulations, and `git diff --check`.
 - Record missing test coverage plainly: no automated mobile E2E and no rendered PDF visual regression suite yet; lint and converter/PDF HTML assertions exist.

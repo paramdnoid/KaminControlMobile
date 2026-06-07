@@ -1,9 +1,7 @@
 ---
 description: Review or change report completion, PDF HTML generation, structured JSON export, sharing behavior, and exported status handling.
 effort: high
-paths:
-  - "app/report/**/*.tsx"
-  - "src/pdf/**/*.ts"
+when_to_use: Use for app/report/**/*.tsx, src/pdf/**/*.ts, report completion, PDF HTML, structured JSON export, sharing, and exported status.
 ---
 
 # Report Export Review

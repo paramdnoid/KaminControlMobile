@@ -1,12 +1,7 @@
 ---
 description: Update README, Claude config docs, project memory guidance, context hygiene, effort policy, and workflow documentation.
 effort: medium
-paths:
-  - "README.md"
-  - "CLAUDE.md"
-  - ".claude/**/*.md"
-  - ".claude/**/*.json"
-  - "docs/**/*.md"
+when_to_use: Use for README.md, CLAUDE.md, .claude/**/*.md, .claude/**/*.json, docs/**/*.md, memory guidance, and config documentation.
 ---
 
 # Docs Memory Update

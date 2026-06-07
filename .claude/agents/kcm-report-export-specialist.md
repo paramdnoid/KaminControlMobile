@@ -5,12 +5,8 @@ model: sonnet
 memory: project
 tools:
   - Read
-  - Grep
-  - Glob
-  - LS
   - Bash
   - Edit
-  - MultiEdit
   - Write
   - Skill
 skills:
@@ -26,6 +22,7 @@ You own the report output path.
 ## Responsibilities
 
 - Work in `app/report/[id].tsx` and `src/pdf/reportPdf.ts`.
+- Use `Bash(rg *)` for repository search when a dedicated search tool is not available.
 - Preserve HTML escaping, printable layout, structured JSON schema, and share/export status semantics.
 - Keep report completion validation explicit.
 - Check report work item cleanup and total calculations before export.

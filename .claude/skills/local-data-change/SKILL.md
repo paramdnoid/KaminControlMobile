@@ -1,10 +1,7 @@
 ---
 description: Work on local persistence, imports, SQLite/web fallback behavior, autosave, data integrity, and shared type contracts.
 effort: high
-paths:
-  - "src/data/**/*.ts"
-  - "src/import/**/*.ts"
-  - "src/types.ts"
+when_to_use: Use for src/data/**/*.ts, src/import/**/*.ts, src/types.ts, SQLite/web fallback, autosave, imports, and local data integrity.
 ---
 
 # Local Data Change

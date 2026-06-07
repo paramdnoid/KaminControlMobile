@@ -51,8 +51,13 @@ def validate_json() -> tuple[bool, str]:
 
 
 def validate_settings_schema() -> tuple[bool, str]:
-    ok, output = run(["npm", "run", "claude:validate-settings"], timeout=45)
+    ok, output = run(["npm", "run", "claude:validate-schema"], timeout=45)
     return ok, output or "Claude settings schema validation ok"
+
+
+def validate_guard_hook_tests() -> tuple[bool, str]:
+    ok, output = run(["npm", "run", "claude:test-hooks"], timeout=45)
+    return ok, output or "Claude guard hook simulations ok"
 
 
 def validate_hooks_compile() -> tuple[bool, str]:
@@ -158,6 +163,7 @@ def config_gate() -> tuple[bool, str]:
     checks = [
         validate_json,
         validate_settings_schema,
+        validate_guard_hook_tests,
         validate_hooks_compile,
         validate_agent_skill_links,
         validate_skill_frontmatter,

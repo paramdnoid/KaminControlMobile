@@ -10,7 +10,7 @@ disallowed-tools: Edit MultiEdit Write
 
 1. Inspect changed files with `git status --short` and `git diff --name-only`.
 2. Select checks from [references/validation-matrix.md](references/validation-matrix.md).
-3. For Claude config, run JSON parse, `npm run claude:validate-settings`, Python compile, agent skill-link validation, and `git diff --check -- CLAUDE.md .claude .gitignore`.
+3. For Claude config, run `npm run claude:validate-settings` and `git diff --check -- CLAUDE.md .claude .gitignore`.
 4. For app or converter changes, run the exact `package.json` scripts.
 5. Report pass/fail, exact commands, and remaining coverage gaps.
 

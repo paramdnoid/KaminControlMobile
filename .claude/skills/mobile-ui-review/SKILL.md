@@ -1,10 +1,7 @@
 ---
 description: Review or improve KaminControlMobile mobile UI, UX, responsive layout, accessibility, component placement, and premium visual quality.
 effort: high
-paths:
-  - "app/**/*.tsx"
-  - "src/components/**/*.tsx"
-  - "src/theme/**/*.ts"
+when_to_use: Use for app/**/*.tsx, src/components/**/*.tsx, src/theme/**/*.ts, mobile UI/UX, accessibility, touch layout, and premium visual quality.
 ---
 
 # Mobile UI Review

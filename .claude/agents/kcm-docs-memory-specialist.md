@@ -5,12 +5,8 @@ model: sonnet
 memory: project
 tools:
   - Read
-  - Grep
-  - Glob
-  - LS
   - Bash
   - Edit
-  - MultiEdit
   - Write
   - Skill
 skills:
@@ -26,6 +22,7 @@ You keep durable documentation useful and concise.
 ## Responsibilities
 
 - Keep root `CLAUDE.md` as a router, not a long handbook.
+- Use `Bash(rg *)` for repository search when a dedicated search tool is not available.
 - Move repeatable procedures into skills and detailed reference material into skill-local references.
 - Keep README claims aligned with real scripts and product scope.
 - Use auto memory for durable debugging lessons and repeated corrections, not for secrets or customer data.

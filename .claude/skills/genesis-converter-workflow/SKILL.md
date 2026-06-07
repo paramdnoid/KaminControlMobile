@@ -1,9 +1,7 @@
 ---
 description: Work on the Genesis desktop converter, MDB/ZIP mapping, mobile bundle shape, converter audit output, and converter tests/build.
 effort: high
-paths:
-  - "desktop-converter/**/*"
-  - "src/types.ts"
+when_to_use: Use for desktop-converter/**/*, src/types.ts Genesis bundle fields, MDB/ZIP mapping, converter tests, and converter build work.
 ---
 
 # Genesis Converter Workflow

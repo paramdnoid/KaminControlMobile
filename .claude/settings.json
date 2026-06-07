@@ -142,7 +142,7 @@
         ]
       },
       {
-        "matcher": "Read|Edit|MultiEdit|Write",
+        "matcher": "Read|Edit|Write|Glob|Grep|LS",
         "hooks": [
           {
             "type": "command",
@@ -154,7 +154,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Edit|MultiEdit|Write",
+        "matcher": "Bash|Edit|Write",
         "hooks": [
           {
             "type": "command",

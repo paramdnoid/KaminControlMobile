@@ -34,6 +34,36 @@ def file_payload(path: str) -> dict:
     }
 
 
+def grep_payload(path: str) -> dict:
+    return {
+        "cwd": str(PROJECT_DIR),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Grep",
+        "tool_input": {"pattern": "customer", "path": path},
+    }
+
+
+def glob_payload(pattern: str, path: str | None = None) -> dict:
+    tool_input = {"pattern": pattern}
+    if path is not None:
+        tool_input["path"] = path
+    return {
+        "cwd": str(PROJECT_DIR),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Glob",
+        "tool_input": tool_input,
+    }
+
+
+def ls_payload(path: str) -> dict:
+    return {
+        "cwd": str(PROJECT_DIR),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "LS",
+        "tool_input": {"path": path},
+    }
+
+
 def bash_payload(command: str) -> dict:
     return {
         "cwd": str(PROJECT_DIR),
@@ -140,6 +170,24 @@ def main() -> int:
     ]
     for path in allowed_file_paths:
         assert_hook_allowed("guard_sensitive_paths.py", file_payload(path), f"file allow {path}")
+
+    blocked_search_payloads = [
+        ("grep block pdfs", grep_payload("pdfs")),
+        ("glob block artifacts pattern", glob_payload("artifacts/**")),
+        ("glob block root artifacts pattern", glob_payload("artifacts/**", str(PROJECT_DIR))),
+        ("glob block mdb pattern", glob_payload("**/*.MDB")),
+        ("ls block artifacts", ls_payload(str(PROJECT_DIR / "artifacts"))),
+    ]
+    for label, payload in blocked_search_payloads:
+        assert_pretool_denied("guard_sensitive_paths.py", payload, label)
+
+    allowed_search_payloads = [
+        ("grep allow src", grep_payload("src")),
+        ("glob allow ts source", glob_payload("src/**/*.ts")),
+        ("ls allow claude", ls_payload(str(PROJECT_DIR / ".claude"))),
+    ]
+    for label, payload in allowed_search_payloads:
+        assert_hook_allowed("guard_sensitive_paths.py", payload, label)
 
     blocked_commands = [
         "cat .env.local",

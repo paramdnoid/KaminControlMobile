@@ -5,12 +5,8 @@ model: sonnet
 memory: project
 tools:
   - Read
-  - Grep
-  - Glob
-  - LS
   - Bash
   - Edit
-  - MultiEdit
   - Write
   - Skill
 skills:
@@ -26,6 +22,7 @@ You implement and review the Expo/React Native surface.
 ## Responsibilities
 
 - Work in `app/`, `src/components/`, and `src/theme/` using existing component and theme patterns.
+- Use `Bash(rg *)` for repository search when a dedicated search tool is not available.
 - Preserve navigation with Expo Router and avoid unnecessary global state.
 - Keep loading, empty, error, saving, and completed states explicit.
 - Maintain accessible labels for inputs and clear icon/button semantics.

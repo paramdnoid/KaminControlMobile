@@ -19,7 +19,7 @@
 - Converter UI: `npm run converter:start`
 - Converter CLI: `npm run converter:convert -- <Daten.zip> <output.json>`
 - Lint: `npm run lint`, `npm run lint:fix`
-- Claude settings and hook simulations: `npm run claude:validate-settings` (shared/local settings schema, guard-hook regression tests, and validation-marker workflow)
+- Claude settings and hook simulations: `npm run claude:validate-settings` (shared/local settings schema, guard-hook regression tests, Python hook compile, agent skill links, skill frontmatter policy, and validation-marker/Stop-gate workflow)
 - Manual final gate: `/ship-check`
 - Manual fresh diff review: `/diff-review <scope or plan>`
 
@@ -49,7 +49,7 @@ Use the main thread as orchestrator. Specialists do not call other agents. When 
 
 ## Validation
 
-- Config-only changes: parse shared/local JSON, run `npm run claude:validate-settings`, compile Python hooks, check agent skill links, and `git diff --check -- CLAUDE.md .claude .gitignore`.
+- Config-only changes: run `npm run claude:validate-settings` and `git diff --check -- CLAUDE.md .claude .gitignore`.
 - Bash-based file changes must still be validated: `mark_validation_needed.py` classifies Git changes after mutating Bash commands, and `quality_gate_stop.py` falls back to Git status when no marker exists.
 - Run `/ship-check` before commit, push, PR, or handoff.
 - App or shared TypeScript changes: `npm run typecheck` and `npm run lint`.

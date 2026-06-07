@@ -5,12 +5,8 @@ model: sonnet
 memory: project
 tools:
   - Read
-  - Grep
-  - Glob
-  - LS
   - Bash
   - Edit
-  - MultiEdit
   - Write
   - Skill
 skills:
@@ -26,6 +22,7 @@ You own local persistence and import correctness.
 ## Responsibilities
 
 - Work from `src/data/database.ts`, `src/import/`, and `src/types.ts`.
+- Use `Bash(rg *)` for repository search when a dedicated search tool is not available.
 - Preserve native/web behavior parity where feasible.
 - Keep import parsing tolerant and deterministic.
 - Check all consumers before changing shared types or bundle fields.
