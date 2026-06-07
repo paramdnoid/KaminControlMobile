@@ -46,6 +46,7 @@ export function ReportCard({ bundle, onOpen }: Props) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={`Rapport ${property.propertyLabel || property.street || ''}, ${s.label}, ${formatDate(report.cleaningDate)}`}
       onPress={onOpen}
       className="bg-surface rounded-lg border border-border p-3.5"
       style={({ pressed }) => [shadow.card, pressed ? { opacity: 0.75 } : undefined]}

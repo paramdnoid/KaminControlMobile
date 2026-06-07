@@ -23,6 +23,7 @@ function isBundle(value: unknown): value is GenesisBundleV1 {
   return (
     (candidate?.schemaVersion === 'genesis-bundle.v1' || candidate?.schemaVersion === 'genesis-bundle.v2') &&
     Boolean(candidate.metadata) &&
+    Array.isArray(candidate.metadata?.warnings) &&
     Array.isArray(candidate.properties) &&
     Array.isArray(candidate.installations) &&
     Array.isArray(candidate.plannedWork) &&
@@ -134,11 +135,14 @@ async function ensureDirectoryFor(fileUri: string): Promise<void> {
 }
 
 async function persistZipPdfs(zip: JSZip, documents: GenesisBundlePdfDocument[] | undefined): Promise<GenesisBundlePdfDocument[] | undefined> {
-  if (!documents?.length || !FileSystem.documentDirectory) {
+  // Prefer cacheDirectory so genesis PDFs are excluded from iCloud/device backup.
+  // Fall back to documentDirectory if cacheDirectory is unavailable (e.g. some Android configs).
+  const storageRoot = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+  if (!documents?.length || !storageRoot) {
     return documents;
   }
 
-  const baseDirectory = `${FileSystem.documentDirectory}genesis-pdfs/`;
+  const baseDirectory = `${storageRoot}genesis-pdfs/`;
   await FileSystem.makeDirectoryAsync(baseDirectory, { intermediates: true }).catch(() => undefined);
 
   const nextDocuments: GenesisBundlePdfDocument[] = [];
@@ -151,7 +155,7 @@ async function persistZipPdfs(zip: JSZip, documents: GenesisBundlePdfDocument[] 
       continue;
     }
 
-    const entryName = document.relativePath || document.archivePath;
+    const entryName = safePath || document.archivePath;
     const entry = entryName
       ? zip.file(entryName) ?? zip.file(new RegExp(`${entryName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))[0]
       : null;

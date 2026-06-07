@@ -15,6 +15,12 @@ Expo/React-Native V1 fuer digitale Kaminfeger-Rapporte vor Ort.
 - PDF-Erzeugung und Teilen abgeschlossener Rapporte.
 - Strukturierte JSON-Ansicht pro abgeschlossenem Rapport als Basis fuer einen spaeteren Genesis-Export.
 
+## Voraussetzungen
+
+- Node.js 20 LTS oder neuer und npm.
+- Expo Go auf dem Testgeraet oder ein Simulator/Emulator.
+- iOS-Builds benoetigen Xcode (macOS), Android-Builds Android Studio.
+
 ## Start
 
 ```bash
@@ -22,16 +28,20 @@ npm install
 npm start
 ```
 
-Web-Vorschau:
+Plattform-Targets:
 
 ```bash
+npm run android
+npm run ios
 npm run web
 ```
 
-Typpruefung:
+Typpruefung und Lint:
 
 ```bash
 npm run typecheck
+npm run lint
+npm run lint:fix
 ```
 
 ## Claude / Quality Gates
@@ -63,7 +73,7 @@ npm run converter:start
 CLI-Konvertierung fuer Tests:
 
 ```bash
-npm run converter:convert -- /Users/andre/Desktop/Daten.zip /tmp/genesis-export-v2.json
+npm run converter:convert -- <pfad/zu/Daten.zip> <pfad/zu/genesis-export-v2.json>
 ```
 
 Mapping-Tests:
@@ -72,7 +82,7 @@ Mapping-Tests:
 npm run converter:test
 ```
 
-Das erzeugte `genesis-export-v2.json` wird in der Mobile-App auf dem Import-Screen ueber `Genesis-Bundle wählen` importiert. `Daten.zip`, `.MDB`-Dateien und erzeugte Bundles sind gitignored.
+Das erzeugte `genesis-export-v2.json` (oder ein `genesis-mobile-export.zip`-Bundle inkl. PDFs) wird in der Mobile-App auf dem Import-Screen ueber `Genesis-Bundle wählen` importiert. `Daten.zip`, `.MDB`-Dateien und erzeugte Bundles sind gitignored.
 
 ## Import
 

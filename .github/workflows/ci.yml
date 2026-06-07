@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck (app + converter)
+        run: |
+          npm run typecheck
+          npm run converter:typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Converter tests
+        run: npm run converter:test
+      - name: Converter build
+        run: npm run converter:build
+      - name: Claude config validation
+        run: npm run claude:validate-settings

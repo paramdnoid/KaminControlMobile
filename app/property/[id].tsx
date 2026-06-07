@@ -34,21 +34,28 @@ export default function PropertyDetailScreen() {
   const [genesisContext, setGenesisContext] = useState<GenesisPropertyContext | null>(null);
   const [reports, setReports] = useState<ReportBundle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<TabKey>('details');
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [nextProperty, nextReports, nextGenesisContext] = await Promise.all([
-      getProperty(id),
-      listReports(undefined, id),
-      getGenesisContext(id),
-    ]);
-    setProperty(nextProperty);
-    setGenesisContext(nextGenesisContext);
-    setReports(nextReports);
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const [nextProperty, nextReports, nextGenesisContext] = await Promise.all([
+        getProperty(id),
+        listReports(undefined, id),
+        getGenesisContext(id),
+      ]);
+      setProperty(nextProperty);
+      setGenesisContext(nextGenesisContext);
+      setReports(nextReports);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Laden fehlgeschlagen.');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -100,6 +107,18 @@ export default function PropertyDetailScreen() {
         <View className="items-center py-6">
           <ActivityIndicator color={colors.primary} />
         </View>
+      </Screen>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Screen title="Liegenschaft">
+        <Card>
+          <Text className="text-h3 font-bold text-ink">Fehler beim Laden</Text>
+          <Text className="text-base text-muted leading-6">{loadError}</Text>
+          <Button label="Erneut versuchen" onPress={load} variant="secondary" />
+        </Card>
       </Screen>
     );
   }

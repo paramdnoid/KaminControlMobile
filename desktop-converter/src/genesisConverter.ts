@@ -190,7 +190,14 @@ function normalizeDate(value: unknown): string {
 }
 
 function parseAmount(value: unknown): number {
-  const parsed = Number(clean(value).replace("'", '').replace(',', '.'));
+  // Swiss/European formats: apostrophe thousands (1'234.50) and comma decimals with
+  // period thousands (1.234,50). Strip all apostrophes/spaces; when a comma decimal is
+  // present, drop period thousand separators before converting the comma to a point.
+  let text = clean(value).replace(/['\s]/g, '');
+  if (text.includes(',')) {
+    text = text.replace(/\./g, '').replace(',', '.');
+  }
+  const parsed = Number(text);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -262,7 +269,7 @@ function buildingTypeFrom(value: unknown): { buildingType: BuildingType | ''; ot
   if (lookup.includes('ferien')) {
     return { buildingType: 'Ferienhaus', otherBuildingType: '' };
   }
-  if (lookup.includes('wohn') && lookup.includes('geschäft')) {
+  if (lookup.includes('wohn') && (lookup.includes('geschäft') || lookup.includes('geschaeft'))) {
     return { buildingType: 'Wohn-/Geschaeftshaus', otherBuildingType: '' };
   }
   if (lookup.includes('bauern')) {

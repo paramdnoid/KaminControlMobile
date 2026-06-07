@@ -22,6 +22,7 @@ export function Field({ label, error, style, containerStyle, ...inputProps }: Pr
         {label}
       </Text>
       <TextInput
+        accessibilityLabel={inputProps.accessibilityLabel ?? label}
         placeholderTextColor={colors.mutedLight}
         className={[
           'bg-surface rounded-md border text-base text-ink min-h-[48px] px-3 py-3',

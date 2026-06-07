@@ -59,32 +59,44 @@ export default function ReportScreen() {
   const [suggestionTab, setSuggestionTab]       = useState<SuggestionTab>('objectTariff');
   const [expandedItemIds, setExpandedItemIds]   = useState<string[]>([]);
   const [isDirty, setIsDirty]                   = useState(false);
+  const [saveError, setSaveError]               = useState<string | null>(null);
+  const [loadError, setLoadError]               = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const nextBundle        = await getReportBundle(id);
-    const nextGenesisContext = nextBundle ? await getGenesisContext(nextBundle.property.id) : null;
-    setBundle(nextBundle);
-    setGenesisContext(nextGenesisContext);
-    setReport(nextBundle?.report ?? null);
-    setWorkItems(
-      nextBundle?.workItems.length
-        ? nextBundle.workItems
-        : nextBundle?.report ? [emptyWorkItem(nextBundle.report.id, 0)] : [],
-    );
-    setIsDirty(false);
-    setLoading(false);
+    try {
+      const nextBundle        = await getReportBundle(id);
+      const nextGenesisContext = nextBundle ? await getGenesisContext(nextBundle.property.id) : null;
+      setBundle(nextBundle);
+      setGenesisContext(nextGenesisContext);
+      setReport(nextBundle?.report ?? null);
+      setWorkItems(
+        nextBundle?.workItems.length
+          ? nextBundle.workItems
+          : nextBundle?.report ? [emptyWorkItem(nextBundle.report.id, 0)] : [],
+      );
+      setIsDirty(false);
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Rapport konnte nicht geladen werden.');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   useEffect(() => {
-    if (!isDirty || !report) return undefined;
+    // Only drafts autosave — never let a debounced write demote a completed/exported report.
+    if (!isDirty || !report || report.status !== 'draft') return undefined;
     const timeout = setTimeout(() => {
       saveReport(report, workItems)
-        .then(() => setSavedAt(new Date().toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })))
-        .catch((e) => console.warn('Autosave failed', e));
+        .then(() => {
+          setSavedAt(new Date().toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }));
+          setSaveError(null);
+        })
+        .catch((e) => setSaveError(e instanceof Error ? e.message : 'Automatisches Speichern fehlgeschlagen.'));
     }, 700);
     return () => clearTimeout(timeout);
   }, [report, workItems, isDirty]);
@@ -125,6 +137,7 @@ export default function ReportScreen() {
       const hasContent = cleanWorkItems(current).length > 0;
       return (hasContent ? [...current, ...newItems] : newItems).map((item, i) => ({ ...item, sortOrder: i }));
     });
+    setIsDirty(true);
   }
   function applyTariffSuggestion(work: GenesisPlannedWork)   { if (!report || work.lineType === 'control') return; appendSuggestedItems([workFromPlannedSuggestion(report.id, work)]); }
   function applyAllTariffs() {
@@ -158,9 +171,24 @@ export default function ReportScreen() {
   async function sharePdf() {
     if (!bundle || !report) return;
     setBusy(true);
-    try   { await saveReport(report, cleanWorkItems(workItems)); await shareReportPdf({ ...bundle, report, workItems: cleanWorkItems(workItems) }); }
-    catch (e) { Alert.alert('PDF fehlgeschlagen', e instanceof Error ? e.message : 'PDF konnte nicht erzeugt werden.'); }
-    finally   { setBusy(false); }
+    try {
+      const clean = cleanWorkItems(workItems);
+      await saveReport(report, clean);
+      const outcome = await shareReportPdf({ ...bundle, report, workItems: clean });
+      if (outcome.method === 'saved') {
+        Alert.alert('Teilen nicht verfügbar', 'Das PDF wurde erstellt, konnte aber auf diesem Gerät nicht geteilt werden.');
+        return;
+      }
+      // Share/print succeeded → advance status to exported (no-op if already exported).
+      if (report.status !== 'exported') {
+        await markReportExported(report.id);
+        await load();
+      }
+    } catch (e) {
+      Alert.alert('PDF fehlgeschlagen', e instanceof Error ? e.message : 'PDF konnte nicht erzeugt werden.');
+    } finally {
+      setBusy(false);
+    }
   }
   async function exportDone() {
     if (!report) return;
@@ -174,6 +202,18 @@ export default function ReportScreen() {
     return (
       <Screen title="Rapport">
         <View className="items-center py-6"><ActivityIndicator color={colors.primary} /></View>
+      </Screen>
+    );
+  }
+  if (loadError) {
+    return (
+      <Screen title="Rapport">
+        <Card>
+          <Text className="text-h3 font-bold text-ink">Laden fehlgeschlagen</Text>
+          <Text className="text-small text-muted">{loadError}</Text>
+          <Button label="Erneut versuchen" onPress={() => load()} variant="primary" />
+          <Button label="Zurück" onPress={() => router.back()} variant="secondary" />
+        </Card>
       </Screen>
     );
   }
@@ -211,6 +251,15 @@ export default function ReportScreen() {
         )
       }
     >
+      {/* Autosave error banner */}
+      {saveError ? (
+        <View className="flex-row items-center gap-2 bg-danger-soft rounded-lg px-3 py-2.5">
+          <Text className="text-small text-danger font-medium flex-1">
+            {saveError} Bitte erneut bearbeiten, um zu speichern.
+          </Text>
+        </View>
+      ) : null}
+
       {/* Property identity card */}
       <Card>
         <View className="flex-row items-center justify-between gap-2">
@@ -280,7 +329,9 @@ export default function ReportScreen() {
               return (
                 <Pressable
                   key={tab}
-                  accessibilityRole="button"
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={`${label}, ${count} Vorschläge`}
                   onPress={() => setSuggestionTab(tab)}
                   className={['flex-1 items-center rounded-sm min-h-[44px] px-1 py-2 gap-0.5 justify-center', active ? 'bg-surface border border-border' : ''].join(' ')}
                   style={({ pressed }) => pressed ? { opacity: 0.75 } : undefined}

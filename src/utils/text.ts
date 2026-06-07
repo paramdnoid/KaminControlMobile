@@ -2,6 +2,17 @@ export function compact(value: string | null | undefined): string {
   return `${value ?? ''}`.replace(/\s+/g, ' ').trim();
 }
 
+// Like compact(), but preserves intentional line breaks. Use for multi-line
+// user fields (e.g. report notes) so newlines survive into PDF/JSON output.
+export function compactMultiline(value: string | null | undefined): string {
+  return `${value ?? ''}`
+    .replace(/\r\n?/g, '\n')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function normalizeLookup(value: string): string {
   return compact(value)
     .toLowerCase()

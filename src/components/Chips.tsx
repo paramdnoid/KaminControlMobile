@@ -36,12 +36,12 @@ export function Chips<T extends string>({ options, selected, onChange, multi = t
             accessibilityState={{ selected: active }}
             onPress={() => toggle(option.value)}
             className={[
-              'rounded-full min-h-[36px] px-4 py-1.5 items-center justify-center',
+              'rounded-full min-h-[44px] px-4 py-1.5 items-center justify-center',
               active
                 ? 'bg-primary'
                 : 'bg-surface border border-border',
             ].join(' ')}
-            style={({ pressed }) => pressed ? { opacity: 0.75 } : undefined}
+            style={({ pressed }) => pressed ? { opacity: 0.75, transform: [{ scale: 0.97 }] } : undefined}
           >
             <Text
               className={`text-small font-semibold ${active ? 'text-white' : 'text-muted'}`}
