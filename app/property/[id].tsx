@@ -382,7 +382,7 @@ function Grid({ children }: { children: ReactNode }) {
 function Cell({ label, value }: { label: string; value: string }) {
   return (
     <View className="w-[47%] gap-0.5">
-      <Text className="text-eyebrow font-semibold text-muted-light uppercase">{label}</Text>
+      <Text className="text-eyebrow font-semibold text-muted uppercase">{label}</Text>
       <Text className="text-base font-medium text-ink leading-5">{value || '-'}</Text>
     </View>
   );
@@ -391,7 +391,7 @@ function Cell({ label, value }: { label: string; value: string }) {
 function Info({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
   return (
     <View className="gap-0.5">
-      <Text className="text-eyebrow font-semibold text-muted-light uppercase">{label}</Text>
+      <Text className="text-eyebrow font-semibold text-muted uppercase">{label}</Text>
       <Text className={`text-base font-medium text-ink ${multiline ? 'leading-5' : 'leading-[22px]'}`}>{value || '-'}</Text>
     </View>
   );
